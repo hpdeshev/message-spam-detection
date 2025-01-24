@@ -13,30 +13,18 @@ from typing_extensions import override
 
 from common.types import ClassificationReport
 from pipeline.text_classifier_builder import TextClassifierBuilder
-from tasks.ada_boost_task import \
-  AdaBoostClassifierBuilder, AdaBoostTask
-from tasks.decision_tree_task import \
-  DecisionTreeClassifierBuilder, DecisionTreeTask
-from tasks.extra_trees_task import \
-  ExtraTreesClassifierBuilder, ExtraTreesTask
-from tasks.gradient_boosting_task import \
-  GradientBoostingClassifierBuilder, GradientBoostingTask
-from tasks.linear_svm_task import \
-  LinearSvmClassifierBuilder, LinearSvmTask
-from tasks.logistic_regression_task import \
-  LogisticRegressionClassifierBuilder, LogisticRegressionTask
-from tasks.naive_bayes_task import \
-  NaiveBayesClassifierBuilder, NaiveBayesTask
-from tasks.poly_svm_task import \
-  PolySvmClassifierBuilder, PolySvmTask
-from tasks.random_forest_task import \
-  RandomForestClassifierBuilder, RandomForestTask
-from tasks.rbf_svm_task import \
-  RbfSvmClassifierBuilder, RbfSvmTask
-from tasks.stacking_task import \
-  StackingClassifierBuilder, StackingTask
-from tasks.voting_task import \
-  VotingClassifierBuilder, VotingTask
+from tasks.ada_boost_task import AdaBoostTask
+from tasks.decision_tree_task import DecisionTreeTask
+from tasks.extra_trees_task import ExtraTreesTask
+from tasks.gradient_boosting_task import GradientBoostingTask
+from tasks.linear_svm_task import LinearSvmTask
+from tasks.logistic_regression_task import LogisticRegressionTask
+from tasks.naive_bayes_task import NaiveBayesTask
+from tasks.poly_svm_task import PolySvmTask
+from tasks.random_forest_task import RandomForestTask
+from tasks.rbf_svm_task import RbfSvmTask
+from tasks.stacking_task import StackingTask
+from tasks.voting_task import VotingTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
@@ -50,8 +38,8 @@ class BestBowTask(luigi.Task):
      - spam `F1-score`
      - `accuracy`;
   2. The best metrics are determined and for every classifier is
-     calculated the Euclidean distance from these best metrics;
-  3. Based on Euclidean distance, the top 3 classifiers are selected;
+     calculated an Euclidean distance from these best metrics;
+  3. Based on the Euclidean distance, the top 3 classifiers are selected;
   4. Finally, the best classifier is selected after additionally
      sorting the metric scores by order of priority, as listed in step 1.
 
@@ -81,108 +69,54 @@ class BestBowTask(luigi.Task):
     test_df = pd.read_csv(
       self.input()["train_test_split"]["test"].path, index_col=0
     )
-    ada_boost_scores = self._get_scores(
-      AdaBoostClassifierBuilder(), "ada_boost",
-      test_df.message, test_df.is_spam
-    )
-    decision_tree_scores = self._get_scores(
-      DecisionTreeClassifierBuilder(), "decision_tree",
-      test_df.message, test_df.is_spam
-    )
-    extra_trees_scores = self._get_scores(
-      ExtraTreesClassifierBuilder(), "extra_trees",
-      test_df.message, test_df.is_spam
-    )
-    gradient_boosting_scores = self._get_scores(
-      GradientBoostingClassifierBuilder(), "gradient_boosting",
-      test_df.message, test_df.is_spam
-    )
-    naive_bayes_scores = self._get_scores(
-      NaiveBayesClassifierBuilder(), "naive_bayes",
-      test_df.message, test_df.is_spam
-    )
-    linear_svm_scores = self._get_scores(
-      LinearSvmClassifierBuilder(), "linear_svm",
-      test_df.message, test_df.is_spam
-    )
-    logistic_regression_scores = self._get_scores(
-      LogisticRegressionClassifierBuilder(), "logistic_regression",
-      test_df.message, test_df.is_spam
-    )
-    rbf_svm_scores = self._get_scores(
-      RbfSvmClassifierBuilder(), "rbf_svm",
-      test_df.message, test_df.is_spam
-    )
-    poly_svm_scores = self._get_scores(
-      PolySvmClassifierBuilder(), "poly_svm",
-      test_df.message, test_df.is_spam
-    )
-    random_forest_scores = self._get_scores(
-      RandomForestClassifierBuilder(), "random_forest",
-      test_df.message, test_df.is_spam
-    )
-    stacking_scores = self._get_scores(
-      StackingClassifierBuilder(), "stacking",
-      test_df.message, test_df.is_spam
-    )
-    voting_scores = self._get_scores(
-      VotingClassifierBuilder(), "voting",
-      test_df.message, test_df.is_spam
-    )
 
-    classifier_names = [
-      "stacking", "voting",
-      "gradient_boosting", "ada_boost",
-      "extra_trees", "random_forest",
-      "poly_svm", "rbf_svm", "linear_svm",
-      "decision_tree", "logistic_regression",
-      "naive_bayes"
-    ]
-
-    classifier_scores = [
-      stacking_scores, voting_scores,
-      gradient_boosting_scores, ada_boost_scores,
-      extra_trees_scores, random_forest_scores,
-      poly_svm_scores, rbf_svm_scores, linear_svm_scores,
-      decision_tree_scores, logistic_regression_scores,
-      naive_bayes_scores
-    ]
+    classifier_scores = {}
+    for name, _ in list(self.requires().items())[1:]:
+      classifier_scores[name] = self._get_scores(
+        name, test_df.message, test_df.is_spam
+      )
 
     classifier_scores_df = pd.DataFrame({
-      "classifier_name" : classifier_names,
-      "spam_precision" : [score["Spam"]["precision"] for score in classifier_scores],
-      "spam_f1" : [score["Spam"]["f1-score"] for score in classifier_scores],
-      "accuracy" : [score["accuracy"] for score in classifier_scores],
+      "classifier_name" : classifier_scores.keys(),
+      "spam_precision" : 
+        [score["Spam"]["precision"] for score in classifier_scores.values()],
+      "spam_f1" :
+        [score["Spam"]["f1-score"] for score in classifier_scores.values()],
+      "accuracy" :
+        [score["accuracy"] for score in classifier_scores.values()],
     })
 
+    max_scores_2d = [[
+      classifier_scores_df.spam_precision.max(),
+      classifier_scores_df.spam_f1.max(),
+      classifier_scores_df.accuracy.max()
+    ]]
     euclidean_dist_ds = classifier_scores_df.apply(
       lambda row: euclidean_distances(
         [[row.spam_precision, row.spam_f1, row.accuracy]],
-        [[classifier_scores_df.spam_precision.max(),
-          classifier_scores_df.spam_f1.max(),
-          classifier_scores_df.accuracy.max()]]
-      )[0],
+        max_scores_2d, squared = True
+      )[0, 0],
       axis=1
     )
-    euclidean_dist_ds.name = "euclidean_dist"
+    euclidean_dist_ds.name = "euclidean_dist_max"
 
     final_classifier_scores_df = pd.concat(
       [classifier_scores_df, euclidean_dist_ds], axis=1
     )
     final_classifier_scores_df = final_classifier_scores_df.sort_values(
-      by="euclidean_dist", ascending=True
+      by="euclidean_dist_max", ascending=True
     )
     final_classifier_scores_df = final_classifier_scores_df.head(3)
     final_classifier_scores_df = final_classifier_scores_df.sort_values(
       by=["spam_precision", "spam_f1", "accuracy"], ascending=False
     )
-    best_bow_classifier_name = (final_classifier_scores_df.head(1)
-                                .classifier_name.values[0])
 
     _save_classifier_scores(
       classifier_scores_df,
       self.output()["bow_classifier_scores"].path
     )
+    best_bow_classifier_name = (final_classifier_scores_df.head(1)
+                                .classifier_name.values[0])
     os.symlink(
       os.path.abspath(self.input()[best_bow_classifier_name].path),
       self.output()["best_bow_classifier"].path
@@ -199,12 +133,11 @@ class BestBowTask(luigi.Task):
 
   def _get_scores(
     self,
-    builder: TextClassifierBuilder,
     input_name: str,
     X: Collection[str],
     y: Collection[int]
   ) -> ClassificationReport:
-    classifier = builder.build(
+    classifier = TextClassifierBuilder().build(
       self.input()[input_name].path
     )
     return classification_report(
@@ -234,11 +167,11 @@ def _save_classifier_scores(
   for i, score_name in enumerate(score_names):
     ax.barh(
       y_locs + ((len(score_names) // 2) - i) * bar_size,
-      scores[i], height=bar_size, label=score_name,
+      scores[i][::-1], height=bar_size, label=score_name,
     )
   ax.set(
     yticks=y_locs,
-    yticklabels=classifier_scores_df.classifier_name,
+    yticklabels=classifier_scores_df.classifier_name[::-1],
     ylim=[
       0 - len(score_names) * bar_size,
       (len(classifier_scores_df.classifier_name)
