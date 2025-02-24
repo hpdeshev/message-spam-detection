@@ -3,6 +3,8 @@ __pycache__/
 bert_classifier/
 cpu_env/
 gpu_env/
+logs/
+mlruns/
 
 *.7z
 *.csv
