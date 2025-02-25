@@ -137,7 +137,7 @@ class BertTask(luigi.Task):
       )
     classifier.build()
     classifier.summary()
-    classifier.compile(optimizer=optimizer)
+    classifier.compile(optimizer=optimizer, metrics=["accuracy"])
     preprocessor = BertPreprocessor(self.model_name, self.max_input_tokens)
 
     train_set = datasets.Dataset.from_pandas(
@@ -154,15 +154,16 @@ class BertTask(luigi.Task):
       classifier, val_set
     )
 
+    class_weight=dict(enumerate(
+      len(y_train) / (2 * np.bincount(y_train))
+    ))
     best_val_loss = None
     n_epoch, n_epoch_no_change, is_looping = 0, 0, True
     while is_looping and (n_epoch < max_epochs):
       history = classifier.fit(
         tokenized_train_set,
         validation_data=tokenized_val_set,
-        class_weight=dict(enumerate(
-          len(y_train) / (2 * np.bincount(y_train))
-        ))
+        class_weight=class_weight
       )
       val_loss = history.history["val_loss"][-1]
       if best_val_loss is None:
