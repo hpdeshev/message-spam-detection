@@ -29,6 +29,12 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
   Together with `get_bow_dataset`, this function makes it possible for
   `BERT` and `BoW` classifiers to learn from the same dataset and
   thus their results on the dataset can be compared.
+
+  Args:
+    bow_classifier: A `Scikit-learn` pipeline.
+
+  Returns:
+    A set of `BoW` vocabulary items.
   """
   bow_vocabulary = set()
   feature_names = [name.split("TF-IDF__")[1]
@@ -54,7 +60,16 @@ def get_bow_dataset(
   
   Together with `get_bow_vocabulary`, this function makes it possible for
   `BERT` and `BoW` classifiers to learn from the same dataset and
-  thus their results on the dataset can be compared. 
+  thus their results on the dataset can be compared.
+
+  Args:
+    bow_vocabulary: A set of `BoW` vocabulary items.
+    bow_tokenizer: A tokenizer function.
+    X: The messages.
+    y: The ham/spam labels.
+
+  Returns:
+    A `Pandas` data frame.
   """
   dataset = {"message" : [], "is_spam" : []}
   for message, is_spam in zip(X, y):
@@ -103,6 +118,11 @@ class BertTask(luigi.Task):
       self.input()["vocab_provider"]["best_bow_classifier"].path
     )
     bow_vocabulary = get_bow_vocabulary(bow_classifier)
+
+    vocab_filepath = Path(self.output()["bert_classifier_vocab"].path)
+    vocab_filepath.parent.mkdir(parents=True, exist_ok=True)
+    vocab_filepath.write_text("\n".join([item for item in bow_vocabulary]))
+
     train_df = pd.read_csv(
       self.input()["train_test_split"]["train"].path, index_col=0
     )
@@ -138,7 +158,7 @@ class BertTask(luigi.Task):
     classifier.build()
     classifier.summary()
     classifier.compile(optimizer=optimizer, metrics=["accuracy"])
-    preprocessor = BertPreprocessor(self.model_name, self.max_input_tokens)
+    preprocessor = BertPreprocessor(vocab_filepath, self.max_input_tokens)
 
     train_set = datasets.Dataset.from_pandas(
       pd.concat([X_train, y_train], axis=1)
@@ -179,28 +199,38 @@ class BertTask(luigi.Task):
         else:
           n_epoch_no_change = 0
           best_val_loss = val_loss
-    classifier.save_pretrained(self.output().path)
+    classifier.save_pretrained(self.output()["bert_classifier_model"].path)
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "bert_classifier"
-    )
+    return {
+      "bert_classifier_model" :
+        luigi.LocalTarget(Path() / "models" / "bert_classifier" / "model"),
+      "bert_classifier_vocab" :
+        luigi.LocalTarget(Path() / "models" / "bert_classifier" / "vocab.txt"),
+    }
 
 
 class BertPreprocessor:
   """Wrapper for a `BERT` preprocessor from Hugging Face Transformers.
   
+  To support straightforward comparison between `BERT` and `BoW` classifiers,
+  `WordPiece` tokenization is not used and the saved at `vocab_filepath`
+  output from the `get_bow_vocabulary` function is directly used instead.
+  The latter approach, implemented via the `transformers.BertTokenizer` class,
+  avoids tokenization divergence due to stemmed or unusual word-tokens
+  additionally split into sub-tokens via the `WordPiece` method.
+
   Data collation for dynamic batch-based padding is used.
   """
 
   def __init__(
     self,
-    model_name: str,
+    vocab_filepath: Path,
     max_input_tokens: int
   ):
-    self._tokenizer = transformers.AutoTokenizer.from_pretrained(
-      model_name, model_max_length=max_input_tokens
+    self._tokenizer = transformers.BertTokenizer(
+      vocab_filepath, model_max_length=max_input_tokens
     )
     self._data_collator = transformers.DataCollatorWithPadding(
       tokenizer=self._tokenizer, return_tensors="tf"
