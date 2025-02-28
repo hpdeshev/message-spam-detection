@@ -199,6 +199,7 @@ class BertTask(luigi.Task):
         else:
           n_epoch_no_change = 0
           best_val_loss = val_loss
+      n_epoch += 1
     classifier.save_pretrained(self.output()["bert_classifier_model"].path)
 
   @override
