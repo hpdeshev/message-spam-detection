@@ -34,7 +34,7 @@ class DecisionTreeClassifierBuilder(TextClassifierBuilder):
     return "Decision Tree model", DecisionTreeClassifier(
       min_samples_leaf=min_samples_leaf,
       min_samples_split=min_samples_split,
-      random_state=misc().random_seed
+      random_state=misc().random_seed,
     )
 
 
@@ -44,9 +44,9 @@ class DecisionTreeTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
-      "feature_estimator" : LogisticRegressionTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "feature_estimator": LogisticRegressionTask(),
     }
 
   @override
@@ -64,7 +64,7 @@ class DecisionTreeTask(luigi.Task):
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
         stemmer=nltk_task.stemmer,
-        feature_estimator=get_predictor(logistic_regression_classifier)
+        feature_estimator=get_predictor(logistic_regression_classifier),
       )
     )
     builder.build(

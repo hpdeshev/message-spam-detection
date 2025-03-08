@@ -34,7 +34,7 @@ class GradientBoostingClassifierBuilder(TextClassifierBuilder):
         learning_rate=0.1, n_estimators=n_estimators,
         subsample=subsample, n_iter_no_change=5,
         validation_fraction=classification().validation_split,
-        random_state=misc().random_seed, warm_start=True
+        random_state=misc().random_seed, warm_start=True,
       )
     )
 
@@ -45,9 +45,9 @@ class GradientBoostingTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
-      "feature_estimator" : LogisticRegressionTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "feature_estimator": LogisticRegressionTask(),
     }
 
   @override
@@ -65,7 +65,7 @@ class GradientBoostingTask(luigi.Task):
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
         stemmer=nltk_task.stemmer,
-        feature_estimator=get_predictor(logistic_regression_classifier)
+        feature_estimator=get_predictor(logistic_regression_classifier),
       )
     )
     builder.build(

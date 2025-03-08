@@ -49,19 +49,19 @@ class BestBowTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "train_test_split" : TrainTestSplitTask(),
-      "ada_boost" : AdaBoostTask(),
-      "decision_tree" : DecisionTreeTask(),
-      "extra_trees" : ExtraTreesTask(),
-      "gradient_boosting" : GradientBoostingTask(),
-      "naive_bayes" : NaiveBayesTask(),
-      "linear_svm" : LinearSvmTask(),
-      "logistic_regression" : LogisticRegressionTask(),
-      "rbf_svm" : RbfSvmTask(),
-      "poly_svm" : PolySvmTask(),
-      "random_forest" : RandomForestTask(),
-      "stacking" : StackingTask(),
-      "voting" : VotingTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "ada_boost": AdaBoostTask(),
+      "decision_tree": DecisionTreeTask(),
+      "extra_trees": ExtraTreesTask(),
+      "gradient_boosting": GradientBoostingTask(),
+      "naive_bayes": NaiveBayesTask(),
+      "linear_svm": LinearSvmTask(),
+      "logistic_regression": LogisticRegressionTask(),
+      "rbf_svm": RbfSvmTask(),
+      "poly_svm": PolySvmTask(),
+      "random_forest": RandomForestTask(),
+      "stacking": StackingTask(),
+      "voting": VotingTask(),
     }
 
   @override
@@ -77,12 +77,12 @@ class BestBowTask(luigi.Task):
       )
 
     classifier_scores_df = pd.DataFrame({
-      "classifier_name" : classifier_scores.keys(),
-      "spam_precision" : 
+      "classifier_name": classifier_scores.keys(),
+      "spam_precision":
         [score["Spam"]["precision"] for score in classifier_scores.values()],
-      "spam_f1" :
+      "spam_f1":
         [score["Spam"]["f1-score"] for score in classifier_scores.values()],
-      "accuracy" :
+      "accuracy":
         [score["accuracy"] for score in classifier_scores.values()],
     })
 
@@ -94,9 +94,9 @@ class BestBowTask(luigi.Task):
     euclidean_dist_ds = classifier_scores_df.apply(
       lambda row: euclidean_distances(
         [[row.spam_precision, row.spam_f1, row.accuracy]],
-        max_scores_2d, squared = True
+        max_scores_2d, squared = True,
       )[0, 0],
-      axis=1
+      axis=1,
     )
     euclidean_dist_ds.name = "euclidean_dist_max"
 
@@ -113,21 +113,21 @@ class BestBowTask(luigi.Task):
 
     _save_classifier_scores(
       classifier_scores_df,
-      self.output()["bow_classifier_scores"].path
+      self.output()["bow_classifier_scores"].path,
     )
     best_bow_classifier_name = (final_classifier_scores_df.head(1)
                                 .classifier_name.values[0])
     os.symlink(
       os.path.abspath(self.input()[best_bow_classifier_name].path),
-      self.output()["best_bow_classifier"].path
+      self.output()["best_bow_classifier"].path,
     )
 
   @override
   def output(self):
     return {
-      "bow_classifier_scores" :
+      "bow_classifier_scores":
         luigi.LocalTarget(Path() / "figures" / "bow_classifier_scores.png"),
-      "best_bow_classifier" :
+      "best_bow_classifier":
         luigi.LocalTarget(Path() / "models" / "best_bow_classifier.pkl"),
     }
 
@@ -135,7 +135,7 @@ class BestBowTask(luigi.Task):
     self,
     input_name: str,
     X: Collection[str],
-    y: Collection[int]
+    y: Collection[int],
   ) -> ClassificationReport:
     classifier = TextClassifierBuilder().build(
       self.input()[input_name].path
@@ -145,13 +145,13 @@ class BestBowTask(luigi.Task):
       labels=[0, 1],
       target_names=["Ham", "Spam"],
       digits=3, output_dict=True,
-      zero_division=np.nan
+      zero_division=np.nan,
     )
 
 
 def _save_classifier_scores(
   classifier_scores_df: pd.DataFrame,
-  filename: str
+  filename: str,
 ) -> None:
   score_names = ["spam precision", "spam F1-score", "accuracy"]
   scores = [classifier_scores_df.spam_precision,

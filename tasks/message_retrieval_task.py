@@ -33,7 +33,7 @@ class MessageRetrievalTask(luigi.Task):
     return [
       luigi.LocalTarget(
         Path() / self.message_folder / file,
-        format=luigi.format.Nop
+        format=luigi.format.Nop,
       )
       for file in self.message_files
     ]

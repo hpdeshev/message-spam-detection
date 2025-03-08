@@ -18,7 +18,7 @@ _URL = "https://archive.ics.uci.edu/static/public/228/"
 
 def _parse_dataset_from_zipfile(
   zfile: ZipFile,
-  spam_data: SpamDict
+  spam_data: SpamDict,
 ) -> None:
   for zipobj in zfile.infolist():
     if not zipobj.filename.endswith("readme"):
@@ -52,7 +52,7 @@ class SmsPreprocessTask(luigi.Task):
 
   @override
   def run(self):
-    spam_data = {"message" : [], "type" : [], "is_spam" : []}
+    spam_data = {"message": [], "type": [], "is_spam": []}
     for file in _FILES:
       with ZipFile(Path() / "data" / file) as zfile:
         _parse_dataset_from_zipfile(zfile, spam_data)

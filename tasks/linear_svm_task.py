@@ -30,7 +30,7 @@ class LinearSvmClassifierBuilder(SgdClassifierBuilder):
   def _create_predictor_data(self, trial: optuna.Trial) -> PipelineStep:
     learning_rate = trial.suggest_categorical(
       "learning_rate",
-      ["constant", "optimal", "invscaling", "adaptive"]
+      ["constant", "optimal", "invscaling", "adaptive"],
     )
     if learning_rate == "optimal":
       alpha = trial.suggest_float("alpha", 1e-4, 1e-1, step=1e-4)
@@ -48,7 +48,7 @@ class LinearSvmClassifierBuilder(SgdClassifierBuilder):
       early_stopping=True, n_iter_no_change=5,
       validation_fraction=classification().validation_split,
       shuffle=True, random_state=misc().random_seed,
-      warm_start=True
+      warm_start=True,
     )
 
 
@@ -58,9 +58,9 @@ class LinearSvmTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
-      "feature_estimator" : LogisticRegressionTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "feature_estimator": LogisticRegressionTask(),
     }
 
   @override
@@ -78,7 +78,7 @@ class LinearSvmTask(luigi.Task):
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
         stemmer=nltk_task.stemmer,
-        feature_estimator=get_predictor(logistic_regression_classifier)
+        feature_estimator=get_predictor(logistic_regression_classifier),
       )
     )
     builder.build(

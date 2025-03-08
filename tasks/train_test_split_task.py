@@ -64,7 +64,7 @@ class TrainTestSplitTask(luigi.Task):
       spam_df[["message", "type"]], spam_df.is_spam,
       test_size=self.test_split,
       random_state=misc().random_seed, shuffle=True,
-      stratify=spam_df.is_spam
+      stratify=spam_df.is_spam,
     )
 
     output = self.output()
@@ -76,10 +76,10 @@ class TrainTestSplitTask(luigi.Task):
   @override
   def output(self):
     return {
-      "train" : luigi.LocalTarget(
+      "train": luigi.LocalTarget(
         Path() / "data" / "train_messages.csv"
       ),
-      "test" : luigi.LocalTarget(
+      "test": luigi.LocalTarget(
         Path() / "data" / "test_messages.csv"
       ),
     }
