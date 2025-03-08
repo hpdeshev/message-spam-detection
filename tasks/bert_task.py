@@ -54,7 +54,7 @@ def get_bow_dataset(
   bow_vocabulary: set[str],
   bow_tokenizer: TokenizerMethod,
   X: Iterable[str],
-  y: Iterable[int]
+  y: Iterable[int],
 ) -> pd.DataFrame:
   """Converts `get_bow_vocabulary`'s output to a message dataset.
   
@@ -71,7 +71,7 @@ def get_bow_dataset(
   Returns:
     A `Pandas` data frame.
   """
-  dataset = {"message" : [], "is_spam" : []}
+  dataset = {"message": [], "is_spam": []}
   for message, is_spam in zip(X, y):
     dataset["message"].append(
       " ".join([
@@ -107,8 +107,8 @@ class BertTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "train_test_split" : TrainTestSplitTask(),
-      "vocab_provider" : BestBowTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "vocab_provider": BestBowTask(),
     }
 
   @override
@@ -128,7 +128,7 @@ class BertTask(luigi.Task):
     )
     bert_train_df = get_bow_dataset(
       bow_vocabulary, bow_classifier["Features"]["TF-IDF"].tokenizer,
-      train_df.message, train_df.is_spam
+      train_df.message, train_df.is_spam,
     )
 
     (X_train, X_val,
@@ -136,7 +136,7 @@ class BertTask(luigi.Task):
       bert_train_df.message, bert_train_df.is_spam,
       test_size=classification().validation_split,
       random_state=misc().random_seed, shuffle=True,
-      stratify=bert_train_df.is_spam
+      stratify=bert_train_df.is_spam,
     )
 
     batch_size = 32
@@ -152,8 +152,8 @@ class BertTask(luigi.Task):
       transformers.TFAutoModelForSequenceClassification.from_pretrained(
         self.model_name,
         num_labels=2,
-        id2label={ 0 : "Ham", 1 : "Spam" },
-        label2id={ "Ham" : 0, "Spam" : 1 },
+        id2label={0 : "Ham", 1 : "Spam"},
+        label2id={"Ham": 0, "Spam": 1},
       )
     classifier.build()
     classifier.summary()
@@ -183,7 +183,7 @@ class BertTask(luigi.Task):
       history = classifier.fit(
         tokenized_train_set,
         validation_data=tokenized_val_set,
-        class_weight=class_weight
+        class_weight=class_weight,
       )
       val_loss = history.history["val_loss"][-1]
       if best_val_loss is None:
@@ -205,9 +205,9 @@ class BertTask(luigi.Task):
   @override
   def output(self):
     return {
-      "bert_classifier_model" :
+      "bert_classifier_model":
         luigi.LocalTarget(Path() / "models" / "bert_classifier" / "model"),
-      "bert_classifier_vocab" :
+      "bert_classifier_vocab":
         luigi.LocalTarget(Path() / "models" / "bert_classifier" / "vocab.txt"),
     }
 
@@ -228,7 +228,7 @@ class BertPreprocessor:
   def __init__(
     self,
     vocab_filepath: Path,
-    max_input_tokens: int
+    max_input_tokens: int,
   ):
     self._tokenizer = transformers.BertTokenizer(
       vocab_filepath, model_max_length=max_input_tokens
@@ -247,28 +247,28 @@ class BertPreprocessor:
     hf_dataset: datasets.Dataset,
     batched: bool = True,
     batch_size: int = 32,
-    shuffle: bool = False
+    shuffle: bool = False,
   ) -> tf_data.Dataset:
     tokenized_dataset = hf_dataset.map(self._preprocess, batched=batched)
     tokenized_dataset = bert_classifier.prepare_tf_dataset(
       tokenized_dataset,
       shuffle=shuffle,
       batch_size=batch_size,
-      collate_fn=self._data_collator
+      collate_fn=self._data_collator,
     )
     return tokenized_dataset
 
   def _preprocess(
     self,
-    data: Mapping[str, list[str | int]]
+    data: Mapping[str, list[str | int]],
   ) -> dict[str, list[list[int] | int]]:
     result = {
-      "input_ids" : self._tokenizer(
-                      data["message"], truncation=True
-                    )["input_ids"],
+      "input_ids": self._tokenizer(
+                     data["message"], truncation=True
+                   )["input_ids"],
     }
     if "is_spam" in data:
       result.update({
-        "labels" : data["is_spam"]
+        "labels": data["is_spam"]
       })
     return result

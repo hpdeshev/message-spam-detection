@@ -29,7 +29,7 @@ class PolySvmClassifierBuilder(TextClassifierBuilder):
     return "Polynomial SVM model", SVC(
       C=C, kernel="poly", degree=degree,
       probability=False, random_state=misc().random_seed,
-      max_iter=100_000
+      max_iter=100_000,
     )
 
 
@@ -39,9 +39,9 @@ class PolySvmTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
-      "feature_estimator" : LogisticRegressionTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "feature_estimator": LogisticRegressionTask(),
     }
 
   @override
@@ -59,7 +59,7 @@ class PolySvmTask(luigi.Task):
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
         stemmer=nltk_task.stemmer,
-        feature_estimator=get_predictor(logistic_regression_classifier)
+        feature_estimator=get_predictor(logistic_regression_classifier),
       )
     )
     builder.build(

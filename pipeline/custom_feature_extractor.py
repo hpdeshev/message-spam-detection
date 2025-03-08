@@ -21,7 +21,7 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
   def fit(
     self,
     X: Collection[str],
-    y: Collection[int] | None = None
+    y: Collection[int] | None = None,
   ) -> "CustomFeatureExtractor":
     return self
 
@@ -32,7 +32,7 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
 
   def get_feature_names_out(
     self,
-    input_features: Collection[str] | None = None
+    input_features: Collection[str] | None = None,
   ) -> np.ndarray[str]:
     return np.array([
       method_name for method_name, _ in self.methods
@@ -41,7 +41,7 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
   def _extract_features(
     self,
     messages: Collection[str],
-    method: FeatureExtractorMethod
+    method: FeatureExtractorMethod,
   ) -> list[int]:
     return [
       method(message.lower().split()) for message in messages

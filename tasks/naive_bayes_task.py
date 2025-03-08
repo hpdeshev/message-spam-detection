@@ -41,8 +41,8 @@ class NaiveBayesTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
     }
 
   @override
@@ -55,7 +55,7 @@ class NaiveBayesTask(luigi.Task):
       context=Context(
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
-        stemmer=nltk_task.stemmer
+        stemmer=nltk_task.stemmer,
       )
     )
     builder.build(

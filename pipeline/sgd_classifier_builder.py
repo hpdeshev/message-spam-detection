@@ -32,7 +32,7 @@ class SgdClassifierBuilder(TextClassifierBuilder):
     balanced_weights: bool = True,
     incremental: bool = False,
     verbose: bool = False,
-    params: dict[str, bool | float | int | str] | None = None
+    params: dict[str, bool | float | int | str] | None = None,
   ) -> Pipeline:
     transformers = get_transformers(model)
     if incremental:
@@ -64,7 +64,7 @@ class SgdClassifierBuilder(TextClassifierBuilder):
       predictor.partial_fit(
         X_train, y_train,
         classes=np.unique(y_train),
-        sample_weight=sample_weights
+        sample_weight=sample_weights,
       )
       if predictor_params["loss"] == "hinge":
         val_loss = hinge_loss(

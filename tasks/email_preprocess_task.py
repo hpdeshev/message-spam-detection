@@ -31,7 +31,7 @@ def _parse_dataset_from_tarfile(
   parser: BytesParser,
   tar: TarFile,
   is_spam: bool,
-  spam_data: SpamDict
+  spam_data: SpamDict,
 ) -> None:
   for tarobj in tar.getmembers()[1:]:
     if not tarobj.name.endswith("cmds"):
@@ -39,7 +39,7 @@ def _parse_dataset_from_tarfile(
         message = parser.parse(file)
         content = _parse_data(
           _parse_payload(message),
-          message.get_content_type()
+          message.get_content_type(),
         )
         spam_data["message"].append(content.replace("\x00", ""))
         spam_data["type"].append("email")
@@ -48,18 +48,18 @@ def _parse_dataset_from_tarfile(
 
 def _parse_data(
   payload: list[Message] | str,
-  content_type: str
+  content_type: str,
 ) -> str:
   if isinstance(payload, list):
     content = ""
     for message in payload:
       if (
-        message.get_content_disposition() != "attachment" and
-        message.get_content_maintype() in ["message", "multipart", "text"]
+        message.get_content_disposition() != "attachment"
+        and message.get_content_maintype() in ["message", "multipart", "text"]
       ):
         content += _parse_data(
           _parse_payload(message),
-          message.get_content_type()
+          message.get_content_type(),
         )
     return content
 
@@ -100,7 +100,7 @@ class EmailPreprocessTask(luigi.Task):
   @override
   def run(self):
     parser = BytesParser()
-    spam_data = {"message" : [], "type" : [], "is_spam" : []}
+    spam_data = {"message": [], "type": [], "is_spam": []}
     for file in _ALL_FILES:
       is_spam = file in _SPAM_FILES
       with tar_open(Path() / "data" / file, mode="r:bz2") as tar:

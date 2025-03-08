@@ -32,7 +32,7 @@ class LogisticRegressionClassifierBuilder(SgdClassifierBuilder):
   def _create_predictor_data(self, trial: optuna.Trial) -> PipelineStep:
     learning_rate = trial.suggest_categorical(
       "learning_rate",
-      ["constant", "optimal", "invscaling", "adaptive"]
+      ["constant", "optimal", "invscaling", "adaptive"],
     )
     if learning_rate == "optimal":
       alpha = trial.suggest_float("alpha", 1e-4, 1e-1, step=1e-4)
@@ -50,7 +50,7 @@ class LogisticRegressionClassifierBuilder(SgdClassifierBuilder):
       early_stopping=True, n_iter_no_change=5,
       validation_fraction=classification().validation_split,
       shuffle=True, random_state=misc().random_seed,
-      warm_start=True
+      warm_start=True,
     )
 
 
@@ -60,8 +60,8 @@ class LogisticRegressionTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
     }
 
   @override
@@ -74,7 +74,7 @@ class LogisticRegressionTask(luigi.Task):
       context=Context(
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
-        stemmer=nltk_task.stemmer
+        stemmer=nltk_task.stemmer,
       )
     )
     builder.build(

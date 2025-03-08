@@ -42,7 +42,7 @@ _PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*(?:[-'][^\W\d_]+)*$"
 
 def _select_feature_extraction_methods(
   X: Collection[str],
-  y: Collection[int]
+  y: Collection[int],
 ) -> FeatureExtractorMethodData:
   """Selects a custom `TF-IDF` feature using `_ALL_FEATURE_EXTRACTION_METHODS`.
   
@@ -51,7 +51,7 @@ def _select_feature_extraction_methods(
   """
   pipe = make_pipeline(
     CustomFeatureExtractor(_ALL_FEATURE_EXTRACTION_METHODS),
-    TfidfTransformer(norm=None)
+    TfidfTransformer(norm=None),
   )
   features = pipe.fit_transform(X, y)
   feature_selector = SelectKBest(chi2, k="all")
@@ -73,8 +73,8 @@ def _get_currency_count(tokens: Tokens) -> int:
 
 def _get_numbers_count(tokens: Tokens) -> int:
   return sum(1 for token in tokens
-             if token.isnumeric() and
-                len(token) >= _MIN_DIGITS_IN_NUMBER)
+             if token.isnumeric()
+                and len(token) >= _MIN_DIGITS_IN_NUMBER)
 
 
 def _get_currency_numbers_count(tokens: Tokens) -> int:
@@ -107,7 +107,7 @@ class Context:
     all_names: set[str],
     all_stopwords: set[str],
     stemmer: nltk.PorterStemmer,
-    feature_estimator: BaseEstimator | None = None
+    feature_estimator: BaseEstimator | None = None,
   ):
     if all_names is None or all_stopwords is None or stemmer is None:
       raise ValueError(
@@ -137,7 +137,7 @@ class TextClassifierBuilder:
     self,
     normalized_data: bool = True,
     balanced_weights: bool = True,
-    context: Context | None = None
+    context: Context | None = None,
   ):
     self._normalized_data = normalized_data
     self._balanced_weights = balanced_weights
@@ -149,7 +149,7 @@ class TextClassifierBuilder:
     saved_model_path: Path | str,
     X: Collection[str] | None = None,
     y: Collection[int] | None = None,
-    params: dict[str, bool | float | int | str] | None = None
+    params: dict[str, bool | float | int | str] | None = None,
   ) -> Pipeline:
     """Creates a trained `BoW` classifier pipeline.
   
@@ -235,7 +235,7 @@ class TextClassifierBuilder:
             "Custom TF-IDF",
             make_pipeline(
               CustomFeatureExtractor(feature_extraction_methods),
-              TfidfTransformer(norm=None)
+              TfidfTransformer(norm=None),
             )
           )
         ])
@@ -255,7 +255,7 @@ class TextClassifierBuilder:
 
       if self._balanced_weights:
         predictor_name = get_predictor_name(classifier)
-        params = {f"{predictor_name}__sample_weight" : get_sample_weights(y)}
+        params = {f"{predictor_name}__sample_weight": get_sample_weights(y)}
       else:
         params = None
       tried_models[trial.number] = classifier
@@ -264,7 +264,7 @@ class TextClassifierBuilder:
         scoring=make_scorer(fbeta_score, beta=_CROSS_VAL_FBETA),
         cv=StratifiedKFold(_CROSS_VAL_SPLITS),
         params=params,
-        n_jobs=-1, verbose=4
+        n_jobs=-1, verbose=4,
       )
       return scores.mean()
 
@@ -289,7 +289,7 @@ class TextClassifierBuilder:
     balanced_weights: bool = True,
     incremental: bool = False,
     verbose: bool = False,
-    params: dict[str, str | int] | None = None
+    params: dict[str, str | int] | None = None,
   ) -> Pipeline:
     transformers = get_transformers(model)
     if incremental:
@@ -313,7 +313,7 @@ class TextClassifierBuilder:
       lowercase=False, tokenizer=self._tokenize,
       token_pattern=None, ngram_range=(1, 2),
       min_df=1e-3, max_df=0.5,
-      norm=None
+      norm=None,
     )
 
   def _create_feature_selector(self, trial: optuna.Trial) -> FeatureSelector:
@@ -323,7 +323,7 @@ class TextClassifierBuilder:
     elif feature_selector_type == "svd":
       n_components = trial.suggest_int(
         "n_components",
-        1, min(self._context.feature_estimator.n_features_in_, 1000)
+        1, min(self._context.feature_estimator.n_features_in_, 1000),
       )
       return make_pipeline(
         TruncatedSVD(n_components=n_components,
@@ -343,8 +343,8 @@ class TextClassifierBuilder:
     return [
       self._context.stemmer.stem(token)
       for token in tokens
-      if (token not in self._context.all_names and
-          token not in self._context.all_stopwords and
-          (re.search(_PATTERN_STARTING_DIGIT, token, re.U) is not None or
-           re.search(_PATTERN_MID_DIGIT, token, re.U) is not None))
+      if (token not in self._context.all_names
+          and token not in self._context.all_stopwords
+          and (re.search(_PATTERN_STARTING_DIGIT, token, re.U) is not None
+               or re.search(_PATTERN_MID_DIGIT, token, re.U) is not None))
     ]

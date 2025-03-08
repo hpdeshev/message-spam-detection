@@ -34,7 +34,7 @@ class VotingClassifierBuilder(TextClassifierBuilder):
   def __init__(
     self,
     estimators: PipelineSteps | None = None,
-    **params
+    **params,
   ):
     super().__init__(**params)
     self._estimators = estimators
@@ -47,7 +47,7 @@ class VotingClassifierBuilder(TextClassifierBuilder):
 
     return "Voting model", VotingClassifier(
       estimators=list(self._estimators[estimators_index]),
-      voting="hard", n_jobs=1
+      voting="hard", n_jobs=1,
     )
 
 
@@ -57,14 +57,14 @@ class VotingTask(luigi.Task):
   @override
   def requires(self):
     return {
-      "nltk" : NltkTask(),
-      "train_test_split" : TrainTestSplitTask(),
-      "feature_estimator" : LogisticRegressionTask(),
-      "linear_svm" : LinearSvmTask(),
-      "rbf_svm" : RbfSvmTask(),
-      "poly_svm" : PolySvmTask(),
-      "random_forest" : RandomForestTask(),
-      "extra_trees" : ExtraTreesTask(),
+      "nltk": NltkTask(),
+      "train_test_split": TrainTestSplitTask(),
+      "feature_estimator": LogisticRegressionTask(),
+      "linear_svm": LinearSvmTask(),
+      "rbf_svm": RbfSvmTask(),
+      "poly_svm": PolySvmTask(),
+      "random_forest": RandomForestTask(),
+      "extra_trees": ExtraTreesTask(),
     }
 
   @override
@@ -103,7 +103,7 @@ class VotingTask(luigi.Task):
         get_predictor_data(rbf_svm_classifier),
         get_predictor_data(poly_svm_classifier),
         get_predictor_data(random_forest_classifier),
-        get_predictor_data(extra_trees_classifier)
+        get_predictor_data(extra_trees_classifier),
       ], r=3)
     )
 
@@ -114,7 +114,7 @@ class VotingTask(luigi.Task):
         all_names=nltk_task.all_names,
         all_stopwords=nltk_task.all_stopwords,
         stemmer=nltk_task.stemmer,
-        feature_estimator=get_predictor(logistic_regression_classifier)
+        feature_estimator=get_predictor(logistic_regression_classifier),
       )
     )
     builder.build(
