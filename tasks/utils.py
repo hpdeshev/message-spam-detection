@@ -24,7 +24,7 @@ def get_class_weights(y: Collection[int]) -> ClassWeights:
   )))
 
 
-def get_sample_weights(y: Collection[int]) -> np.ndarray[float]:
+def get_sample_weights(y: Collection[int]) -> np.ndarray:
   """Returns sample weights inversely proportional to class frequencies.
   
   Args:
