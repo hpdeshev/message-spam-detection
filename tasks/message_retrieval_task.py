@@ -24,9 +24,9 @@ class MessageRetrievalTask(luigi.Task):
         response = requests.get(
           self.message_url + os.path.basename(filepath.path)
         )
-        tar_fileobj = io.BytesIO(response.content)
+        fileobj = io.BytesIO(response.content)
         with filepath.open("w") as f:
-          f.write(tar_fileobj.getbuffer())
+          f.write(fileobj.getbuffer())
 
   @override
   def output(self):
