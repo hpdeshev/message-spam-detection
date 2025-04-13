@@ -6,22 +6,16 @@ from sklearn.pipeline import Pipeline
 from common.types import PipelineStep
 
 
-def get_transformers(model: Pipeline) -> list[BaseEstimator]:
-  return (model[:-1]
-          if isinstance(model, Pipeline)
-          else model)
+def get_transformers(model: Pipeline) -> Pipeline:
+  return model[:-1]
 
 
 def get_predictor_name(model: Pipeline) -> str:
-  return (model.steps[-1][0]
-          if isinstance(model, Pipeline)
-          else model.__class__.__name__)
+  return model.steps[-1][0]
 
 
 def get_predictor(model: Pipeline) -> BaseEstimator:
-  return (model.steps[-1][1]
-          if isinstance(model, Pipeline)
-          else model)
+  return model.steps[-1][1]
 
 
 def get_predictor_data(model: Pipeline) -> PipelineStep:

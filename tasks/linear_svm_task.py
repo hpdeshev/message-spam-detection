@@ -46,8 +46,8 @@ class LinearSvmClassifierBuilder(SgdClassifierBuilder):
       loss="hinge",
       alpha=alpha, learning_rate=learning_rate, eta0=eta0,
       early_stopping=True, n_iter_no_change=5,
-      validation_fraction=classification().validation_split,
-      shuffle=True, random_state=misc().random_seed,
+      validation_fraction=classification().validation_split,  # type: ignore
+      shuffle=True, random_state=misc().random_seed,  # type: ignore
       warm_start=True,
     )
 
@@ -56,7 +56,7 @@ class LinearSvmTask(luigi.Task):
   """Outputs a `linear SVM` text classifier."""
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -66,11 +66,12 @@ class LinearSvmTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path, index_col=0
+      self.input()["train_test_split"]["train"].path,  # type: ignore
+      index_col=0,
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path
+      self.input()["feature_estimator"].path  # type: ignore
     )
     nltk_task = self.requires()["nltk"]
     builder = LinearSvmClassifierBuilder(
@@ -86,7 +87,7 @@ class LinearSvmTask(luigi.Task):
     )
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "models" / "linear_svm_classifier.pkl"
     )

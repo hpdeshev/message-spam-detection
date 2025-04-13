@@ -1,5 +1,6 @@
 """Implementation of voting text classifier."""
 
+from collections.abc import Sequence
 import itertools
 from pathlib import Path
 
@@ -33,7 +34,7 @@ class VotingClassifierBuilder(TextClassifierBuilder):
 
   def __init__(
     self,
-    estimators: PipelineSteps | None = None,
+    estimators: Sequence[PipelineSteps] | None = None,
     **params,
   ):
     super().__init__(**params)
@@ -41,10 +42,11 @@ class VotingClassifierBuilder(TextClassifierBuilder):
 
   @override
   def _create_predictor_data(self, trial: optuna.Trial) -> PipelineStep:
+    if not self._estimators:
+      raise ValueError("No estimators have been configured.")
     estimators_index = trial.suggest_int(
       "estimators_index", 0, len(self._estimators) - 1
     )
-
     return "Voting model", VotingClassifier(
       estimators=list(self._estimators[estimators_index]),
       voting="hard", n_jobs=1,
@@ -55,7 +57,7 @@ class VotingTask(luigi.Task):
   """Outputs a `voting` text classifier."""
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -70,31 +72,32 @@ class VotingTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path, index_col=0
+      self.input()["train_test_split"]["train"].path,  # type: ignore
+      index_col=0,
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path
+      self.input()["feature_estimator"].path  # type: ignore
     )
     linear_svm_builder = LinearSvmClassifierBuilder()
     linear_svm_classifier = linear_svm_builder.build(
-      self.input()["linear_svm"].path
+      self.input()["linear_svm"].path  # type: ignore
     )
     rbf_svm_builder = RbfSvmClassifierBuilder()
     rbf_svm_classifier = rbf_svm_builder.build(
-      self.input()["rbf_svm"].path
+      self.input()["rbf_svm"].path  # type: ignore
     )
     poly_svm_builder = PolySvmClassifierBuilder()
     poly_svm_classifier = poly_svm_builder.build(
-      self.input()["poly_svm"].path
+      self.input()["poly_svm"].path  # type: ignore
     )
     random_forest_builder = RandomForestClassifierBuilder()
     random_forest_classifier = random_forest_builder.build(
-      self.input()["random_forest"].path
+      self.input()["random_forest"].path  # type: ignore
     )
     extra_trees_builder = ExtraTreesClassifierBuilder()
     extra_trees_classifier = extra_trees_builder.build(
-      self.input()["extra_trees"].path
+      self.input()["extra_trees"].path  # type: ignore
     )
 
     voting_estimators = list(
@@ -122,7 +125,7 @@ class VotingTask(luigi.Task):
     )
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "models" / "voting_classifier.pkl"
     )

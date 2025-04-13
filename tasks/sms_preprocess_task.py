@@ -25,12 +25,12 @@ def _parse_dataset_from_zipfile(
       with zfile.open(zipobj.filename, mode="r") as file:
         for line in file:
           message, is_spam = _parse_data(line)
-          spam_data["message"].append(message)
-          spam_data["type"].append("sms")
-          spam_data["is_spam"].append(is_spam)
+          spam_data["message"] += [message]
+          spam_data["type"] += ["sms"]
+          spam_data["is_spam"] += [is_spam]
 
 
-def _parse_data(payload: str) -> tuple[str, int]:
+def _parse_data(payload: bytes) -> tuple[str, int]:
   message_tag, message = re.split(
     r"\s+", payload.decode().strip(), maxsplit=1
   )
@@ -45,7 +45,7 @@ class SmsPreprocessTask(luigi.Task):
   """
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return MessageRetrievalTask(
       _FILES, "data", _URL
     )
@@ -60,7 +60,7 @@ class SmsPreprocessTask(luigi.Task):
     spam_df.to_csv(self.output().path)
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "data" / "sms_spam_data.csv"
     )

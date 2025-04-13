@@ -34,7 +34,7 @@ class TrainTestSplitTask(luigi.Task):
   test_split = luigi.FloatParameter(0.2)
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     deps = {}
     if self.email:
       deps["email"] = EmailPreprocessTask()
@@ -46,12 +46,18 @@ class TrainTestSplitTask(luigi.Task):
   def run(self):
     datasets = []
     if self.email:
-      email_spam_df = pd.read_csv(self.input()["email"].path, index_col=0)
+      email_spam_df = pd.read_csv(
+        self.input()["email"].path,  # type: ignore
+        index_col=0,
+      )
       if not self.duplicates:
         email_spam_df = email_spam_df.drop_duplicates()
       datasets += [email_spam_df]
     if self.sms:
-      sms_spam_df = pd.read_csv(self.input()["sms"].path, index_col=0)
+      sms_spam_df = pd.read_csv(
+        self.input()["sms"].path,  # type: ignore
+        index_col=0,
+      )
       if not self.duplicates:
         sms_spam_df = sms_spam_df.drop_duplicates()
       datasets += [sms_spam_df]
@@ -62,8 +68,8 @@ class TrainTestSplitTask(luigi.Task):
     (X_train, X_test,
      y_train, y_test) = train_test_split(
       spam_df[["message", "type"]], spam_df.is_spam,
-      test_size=self.test_split,
-      random_state=misc().random_seed, shuffle=True,
+      test_size=self.test_split,  # type: ignore
+      random_state=misc().random_seed, shuffle=True,  # type: ignore
       stratify=spam_df.is_spam,
     )
 
@@ -74,7 +80,7 @@ class TrainTestSplitTask(luigi.Task):
     test_df.to_csv(output["test"].path)
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return {
       "train": luigi.LocalTarget(
         Path() / "data" / "train_messages.csv"

@@ -1,6 +1,5 @@
 """Selection of the best bag-of-words (BoW) classifier for spam data."""
 
-from collections.abc import Collection
 import os
 from pathlib import Path
 
@@ -47,7 +46,7 @@ class BestBowTask(luigi.Task):
   """
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "train_test_split": TrainTestSplitTask(),
       "ada_boost": AdaBoostTask(),
@@ -67,7 +66,8 @@ class BestBowTask(luigi.Task):
   @override
   def run(self):
     test_df = pd.read_csv(
-      self.input()["train_test_split"]["test"].path, index_col=0
+      self.input()["train_test_split"]["test"].path,  # type: ignore
+      index_col=0,
     )
 
     classifier_scores = {}
@@ -86,15 +86,15 @@ class BestBowTask(luigi.Task):
         [score["accuracy"] for score in classifier_scores.values()],
     })
 
-    max_scores_2d = [[
+    max_scores_2d = np.array([[
       classifier_scores_df.spam_precision.max(),
       classifier_scores_df.spam_f1.max(),
       classifier_scores_df.accuracy.max()
-    ]]
+    ]])
     euclidean_dist_ds = classifier_scores_df.apply(
       lambda row: euclidean_distances(
-        [[row.spam_precision, row.spam_f1, row.accuracy]],
-        max_scores_2d, squared = True,
+        X=np.array([[row.spam_precision, row.spam_f1, row.accuracy]]),
+        Y=max_scores_2d, squared=True,
       )[0, 0],
       axis=1,
     )
@@ -123,7 +123,7 @@ class BestBowTask(luigi.Task):
     )
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return {
       "bow_classifier_scores":
         luigi.LocalTarget(Path() / "figures" / "bow_classifier_scores.png"),
@@ -134,18 +134,18 @@ class BestBowTask(luigi.Task):
   def _get_scores(
     self,
     input_name: str,
-    X: Collection[str],
-    y: Collection[int],
+    X: pd.Series,
+    y: pd.Series,
   ) -> ClassificationReport:
     classifier = TextClassifierBuilder().build(
-      self.input()[input_name].path
+      self.input()[input_name].path  # type: ignore
     )
     return classification_report(
       y, classifier.predict(X),
       labels=[0, 1],
       target_names=["Ham", "Spam"],
       digits=3, output_dict=True,
-      zero_division=np.nan,
+      zero_division=np.nan,  # type: ignore
     )
 
 

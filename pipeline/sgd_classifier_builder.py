@@ -1,9 +1,9 @@
 """Trains bag-of-words (BoW) models via stochastic gradient descent (SGD)."""
 
-from collections.abc import Collection
 import copy
 
 import numpy as np
+import pandas as pd
 from sklearn.metrics import accuracy_score, hinge_loss, log_loss
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -27,8 +27,8 @@ class SgdClassifierBuilder(TextClassifierBuilder):
   def _fit(
     self,
     model: Pipeline,
-    X: Collection[str],
-    y: Collection[int],
+    X: pd.Series,
+    y: pd.Series,
     balanced_weights: bool = True,
     incremental: bool = False,
     verbose: bool = False,
@@ -52,27 +52,27 @@ class SgdClassifierBuilder(TextClassifierBuilder):
      y_train, y_val) = train_test_split(
       X_tfidf, y,
       test_size=predictor_params["validation_fraction"],
-      random_state=misc().random_seed, shuffle=True,
+      random_state=misc().random_seed, shuffle=True,  # type: ignore
       stratify=y,
     )
     sample_weights = (
       get_sample_weights(y_train) if balanced_weights else None
     )
-    best_val_loss, last_good_model = None, None
+    best_val_loss, last_good_model = None, copy.deepcopy(model)
     n_iter, n_iter_no_change, is_looping = 0, 0, True
     while is_looping and (n_iter < max_iter):
-      predictor.partial_fit(
+      predictor.partial_fit(  # type: ignore
         X_train, y_train,
         classes=np.unique(y_train),
         sample_weight=sample_weights,
       )
       if predictor_params["loss"] == "hinge":
         val_loss = hinge_loss(
-          y_val, predictor.decision_function(X_val)
+          y_val, predictor.decision_function(X_val)  # type: ignore
         )
       else:
         val_loss = log_loss(
-          y_val, predictor.predict_proba(X_val)[:, 1]
+          y_val, predictor.predict_proba(X_val)[:, 1]  # type: ignore
         )
       if best_val_loss is None:
         best_val_loss = val_loss
@@ -91,10 +91,10 @@ class SgdClassifierBuilder(TextClassifierBuilder):
           last_good_model = copy.deepcopy(model)
       if verbose:
         train_acc = accuracy_score(
-          y_train, predictor.predict(X_train)
+          y_train, predictor.predict(X_train)  # type: ignore
         )
         val_acc = accuracy_score(
-          y_val, predictor.predict(X_val)
+          y_val, predictor.predict(X_val)  # type: ignore
         )
         print(f"train_accuracy={train_acc:.3f}, "
               f"val_accuracy={val_acc:.3f}, "

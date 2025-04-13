@@ -1,13 +1,13 @@
 """General types."""
 
-from collections.abc import Callable
-from typing import TypeAlias
+from collections.abc import Callable, Sequence
 
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
+from typing_extensions import TypeAlias
 
 
-ClassificationReport: TypeAlias = dict[str, dict[str, float] | float]
+ClassificationReport: TypeAlias = str | dict
 ClassWeights: TypeAlias = dict[int, float]
 Tokens: TypeAlias = list[str]
 FeatureExtractor: TypeAlias = BaseEstimator
@@ -23,6 +23,6 @@ HamSpamFeatureImportances: TypeAlias = (
   tuple[FeatureImportances, FeatureImportances]
 )
 PipelineStep: TypeAlias = tuple[str, BaseEstimator]
-PipelineSteps: TypeAlias = list[PipelineStep]
+PipelineSteps: TypeAlias = Sequence[PipelineStep]
 SpamDict: TypeAlias = dict[str, list[str | int]]
 TokenizerMethod: TypeAlias = Callable[[str], Tokens]
