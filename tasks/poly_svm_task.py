@@ -28,7 +28,7 @@ class PolySvmClassifierBuilder(TextClassifierBuilder):
 
     return "Polynomial SVM model", SVC(
       C=C, kernel="poly", degree=degree,
-      probability=False, random_state=misc().random_seed,
+      probability=False, random_state=misc().random_seed,  # type: ignore
       max_iter=100_000,
     )
 
@@ -37,7 +37,7 @@ class PolySvmTask(luigi.Task):
   """Outputs a `polynomial SVM` text classifier."""
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -47,11 +47,12 @@ class PolySvmTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path, index_col=0
+      self.input()["train_test_split"]["train"].path,  # type: ignore
+      index_col=0,
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path
+      self.input()["feature_estimator"].path  # type: ignore
     )
     nltk_task = self.requires()["nltk"]
     builder = PolySvmClassifierBuilder(
@@ -67,7 +68,7 @@ class PolySvmTask(luigi.Task):
     )
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "models" / "poly_svm_classifier.pkl"
     )

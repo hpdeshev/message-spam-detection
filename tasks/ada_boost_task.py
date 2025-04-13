@@ -30,7 +30,7 @@ class AdaBoostClassifierBuilder(TextClassifierBuilder):
 
     return "AdaBoost model", AdaBoostClassifier(
       n_estimators=n_estimators, learning_rate=1,
-      random_state=misc().random_seed,
+      random_state=misc().random_seed,  # type: ignore
     )
 
 
@@ -38,7 +38,7 @@ class AdaBoostTask(luigi.Task):
   """Outputs an `AdaBoost` text classifier."""
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -48,11 +48,12 @@ class AdaBoostTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path, index_col=0
+      self.input()["train_test_split"]["train"].path,  # type: ignore
+      index_col=0,
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path
+      self.input()["feature_estimator"].path  # type: ignore
     )
     nltk_task = self.requires()["nltk"]
     builder = AdaBoostClassifierBuilder(
@@ -68,7 +69,7 @@ class AdaBoostTask(luigi.Task):
     )
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "models" / "ada_boost_classifier.pkl"
     )

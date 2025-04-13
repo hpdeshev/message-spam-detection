@@ -1,8 +1,7 @@
 """Utilities supporting implementation of Luigi tasks."""
 
-from collections.abc import Collection
-
 import numpy as np
+from numpy.typing import ArrayLike
 from sklearn.utils.class_weight import (
   compute_class_weight, compute_sample_weight
 )
@@ -10,7 +9,7 @@ from sklearn.utils.class_weight import (
 from common.types import ClassWeights
 
 
-def get_class_weights(y: Collection[int]) -> ClassWeights:
+def get_class_weights(y: ArrayLike) -> ClassWeights:
   """Returns class weights inversely proportional to class frequencies.
   
   Args:
@@ -24,7 +23,7 @@ def get_class_weights(y: Collection[int]) -> ClassWeights:
   )))
 
 
-def get_sample_weights(y: Collection[int]) -> np.ndarray:
+def get_sample_weights(y: ArrayLike) -> np.ndarray:
   """Returns sample weights inversely proportional to class frequencies.
   
   Args:

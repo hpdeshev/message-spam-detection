@@ -10,10 +10,10 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 import tensorflow as tf
-import tensorflow.data as tf_data
-import tensorflow.keras.models as tf_models
+import tf_keras
+import tf_keras.models as tf_models
 import transformers
-from typing_extensions import override
+from typing_extensions import Any, override
 
 from common.config import classification, misc
 from common.types import TokenizerMethod
@@ -73,14 +73,14 @@ def get_bow_dataset(
   """
   dataset = {"message": [], "is_spam": []}
   for message, is_spam in zip(X, y):
-    dataset["message"].append(
+    dataset["message"] += [
       " ".join([
         token
         for token in bow_tokenizer(message)
         if token in bow_vocabulary
       ])
-    )
-    dataset["is_spam"].append(is_spam)
+    ]
+    dataset["is_spam"] += [is_spam]
   return pd.DataFrame(dataset)
 
 
@@ -105,7 +105,7 @@ class BertTask(luigi.Task):
   model_name = luigi.Parameter("google/bert_uncased_L-2_H-128_A-2")
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return {
       "train_test_split": TrainTestSplitTask(),
       "vocab_provider": BestBowTask(),
@@ -115,7 +115,7 @@ class BertTask(luigi.Task):
   def run(self):
     bow_builder = TextClassifierBuilder()
     bow_classifier = bow_builder.build(
-      self.input()["vocab_provider"]["best_bow_classifier"].path
+      self.input()["vocab_provider"]["best_bow_classifier"].path  # type: ignore
     )
     bow_vocabulary = get_bow_vocabulary(bow_classifier)
 
@@ -124,18 +124,20 @@ class BertTask(luigi.Task):
     vocab_filepath.write_text("\n".join([item for item in bow_vocabulary]))
 
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path, index_col=0
+      self.input()["train_test_split"]["train"].path,  # type: ignore
+      index_col=0,
     )
     bert_train_df = get_bow_dataset(
-      bow_vocabulary, bow_classifier["Features"]["TF-IDF"].tokenizer,
+      bow_vocabulary,
+      bow_classifier.named_steps["Features"]["TF-IDF"].tokenizer,
       train_df.message, train_df.is_spam,
     )
 
     (X_train, X_val,
      y_train, y_val) = train_test_split(
       bert_train_df.message, bert_train_df.is_spam,
-      test_size=classification().validation_split,
-      random_state=misc().random_seed, shuffle=True,
+      test_size=classification().validation_split,  # type: ignore
+      random_state=misc().random_seed, shuffle=True,  # type: ignore
       stratify=bert_train_df.is_spam,
     )
 
@@ -150,7 +152,7 @@ class BertTask(luigi.Task):
 
     classifier = \
       transformers.TFAutoModelForSequenceClassification.from_pretrained(
-        self.model_name,
+        self.model_name,  # type: ignore
         num_labels=2,
         id2label={0 : "Ham", 1 : "Spam"},
         label2id={"Ham": 0, "Spam": 1},
@@ -158,7 +160,8 @@ class BertTask(luigi.Task):
     classifier.build()
     classifier.summary()
     classifier.compile(optimizer=optimizer, metrics=["accuracy"])
-    preprocessor = BertPreprocessor(vocab_filepath, self.max_input_tokens)
+    preprocessor = BertPreprocessor(vocab_filepath,
+                                    self.max_input_tokens)  # type: ignore
 
     train_set = datasets.Dataset.from_pandas(
       pd.concat([X_train, y_train], axis=1)
@@ -203,7 +206,7 @@ class BertTask(luigi.Task):
     classifier.save_pretrained(self.output()["bert_classifier_model"].path)
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return {
       "bert_classifier_model":
         luigi.LocalTarget(Path() / "models" / "bert_classifier" / "model"),
@@ -248,7 +251,7 @@ class BertPreprocessor:
     batched: bool = True,
     batch_size: int = 32,
     shuffle: bool = False,
-  ) -> tf_data.Dataset:
+  ) -> tf.data.Dataset:
     tokenized_dataset = hf_dataset.map(self._preprocess, batched=batched)
     tokenized_dataset = bert_classifier.prepare_tf_dataset(
       tokenized_dataset,
@@ -260,8 +263,8 @@ class BertPreprocessor:
 
   def _preprocess(
     self,
-    data: Mapping[str, list[str | int]],
-  ) -> dict[str, list[list[int] | int]]:
+    data: Mapping[str, Any],
+  ) -> Mapping[str, Any]:
     result = {
       "input_ids": self._tokenizer(
                      data["message"], truncation=True

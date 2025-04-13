@@ -1,6 +1,5 @@
 """Basic Scikit-learn pipelines for bag-of-words (BoW) classification."""
 
-from collections.abc import Collection
 import os
 from pathlib import Path
 import pickle
@@ -9,6 +8,7 @@ import re
 import nltk
 import numpy as np
 import optuna
+import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer, TfidfVectorizer
@@ -21,7 +21,7 @@ from sklearn.utils import check_X_y
 
 from common.config import classification, misc
 from common.types import (
-  Tokens, FeatureExtractor, FeatureExtractorMethodData,
+  Tokens, FeatureExtractorMethodData,
   FeatureSelector, PipelineStep
 )
 from pipeline.custom_feature_extractor import CustomFeatureExtractor
@@ -41,8 +41,8 @@ _PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*(?:[-'][^\W\d_]+)*$"
 
 
 def _select_feature_extraction_methods(
-  X: Collection[str],
-  y: Collection[int],
+  X: pd.Series,
+  y: pd.Series,
 ) -> FeatureExtractorMethodData:
   """Selects a custom `TF-IDF` feature using `_ALL_FEATURE_EXTRACTION_METHODS`.
   
@@ -51,10 +51,10 @@ def _select_feature_extraction_methods(
   """
   pipe = make_pipeline(
     CustomFeatureExtractor(_ALL_FEATURE_EXTRACTION_METHODS),
-    TfidfTransformer(norm=None),
+    TfidfTransformer(norm=None),  # type: ignore
   )
   features = pipe.fit_transform(X, y)
-  feature_selector = SelectKBest(chi2, k="all")
+  feature_selector = SelectKBest(chi2, k="all")  # type: ignore
   feature_selector.fit_transform(features, y)
   print("\n\nK-best scores:")
   print("-" * 80)
@@ -128,7 +128,7 @@ class TextClassifierBuilder:
       `TF-IDF` data, normalization is required by some `BoW` classifiers;
     - balanced_weights: if *True*, sample weighting is applied based on
       class frequencies;
-    - context: optional, an instance of Context.
+    - context: optional, an instance of `Context`.
 
   No-argument construction implies an already built classifier.
   """
@@ -147,8 +147,8 @@ class TextClassifierBuilder:
   def build(
     self,
     saved_model_path: Path | str,
-    X: Collection[str] | None = None,
-    y: Collection[int] | None = None,
+    X: pd.Series | None = None,
+    y: pd.Series | None = None,
     params: dict[str, bool | float | int | str] | None = None,
   ) -> Pipeline:
     """Creates a trained `BoW` classifier pipeline.
@@ -168,7 +168,7 @@ class TextClassifierBuilder:
     - `_create_feature_extractor` is called to create a `TF-IDF` vectorizer;
     - optionally, `_create_feature_selector` is called to create a selector
       for only the most useful `TF-IDF` features;
-    - the overriden method `_create_predictor_data` is called in order to
+    - the overridden method `_create_predictor_data` is called in order to
       obtain the pipeline's predictor and its hyperparameters for tuning.
 
     All pipeline steps but the last predictor one have well-known fixed names.
@@ -205,10 +205,12 @@ class TextClassifierBuilder:
       if X is None or y is None:
         return model
 
-    X, y = check_X_y(X, y, dtype=None, ensure_2d=False)
+    if X is None or y is None:
+      raise ValueError("X and/or y is None.")
+    X, y = check_X_y(X, y, dtype=None, ensure_2d=False)  # type: ignore
 
     if model is not None:
-      self._fit(model, X, y,
+      self._fit(model, X, y,  # type: ignore
                 balanced_weights=self._balanced_weights,
                 incremental=True, verbose=True,
                 params=params)
@@ -219,23 +221,30 @@ class TextClassifierBuilder:
         os.remove(saved_model_path)
       return model
 
-    sampler = optuna.samplers.TPESampler(seed=misc().random_seed)
+    sampler = optuna.samplers.TPESampler(
+      seed=misc().random_seed  # type: ignore
+    )
     self._study = optuna.create_study(
       direction="maximize", sampler=sampler
     )
-    feature_extraction_methods = _select_feature_extraction_methods(X, y)
+    feature_extraction_methods = _select_feature_extraction_methods(
+      X, y  # type: ignore
+    )
 
     tried_models = {}
     def mean_score(trial: optuna.Trial) -> float:
+      if self._context is None:
+        raise ValueError(f"Context is None.")
       estimators = [(
         "Features",
         FeatureUnion([
-          ("TF-IDF", self._create_feature_extractor(trial=trial)),
+          ("TF-IDF",
+           self._create_feature_extractor(trial=trial)),  # type: ignore
           (
             "Custom TF-IDF",
             make_pipeline(
               CustomFeatureExtractor(feature_extraction_methods),
-              TfidfTransformer(norm=None),
+              TfidfTransformer(norm=None),  # type: ignore
             )
           )
         ])
@@ -255,7 +264,8 @@ class TextClassifierBuilder:
 
       if self._balanced_weights:
         predictor_name = get_predictor_name(classifier)
-        params = {f"{predictor_name}__sample_weight": get_sample_weights(y)}
+        params = {f"{predictor_name}__sample_weight":
+                    get_sample_weights(y)}  # type: ignore
       else:
         params = None
       tried_models[trial.number] = classifier
@@ -263,7 +273,7 @@ class TextClassifierBuilder:
         classifier, X, y,
         scoring=make_scorer(fbeta_score, beta=_CROSS_VAL_FBETA),
         cv=StratifiedKFold(_CROSS_VAL_SPLITS),
-        params=params,
+        params=params,  # type: ignore
         n_jobs=-1, verbose=4,
       )
       return scores.mean()
@@ -271,7 +281,7 @@ class TextClassifierBuilder:
     self._study.optimize(mean_score, n_trials=_OPTUNA_N_TRIALS,
                          n_jobs=1, show_progress_bar=True)
     model = tried_models[self._study.best_trial.number]
-    model = self._fit(model, X, y,
+    model = self._fit(model, X, y,  # type: ignore
                       balanced_weights=self._balanced_weights, verbose=True,
                       params=params)
     try:
@@ -284,12 +294,12 @@ class TextClassifierBuilder:
   def _fit(
     self,
     model: Pipeline,
-    X: Collection[str],
-    y: Collection[int],
+    X: pd.Series,
+    y: pd.Series,
     balanced_weights: bool = True,
     incremental: bool = False,
     verbose: bool = False,
-    params: dict[str, str | int] | None = None,
+    params: dict[str, bool | float | int | str] | None = None,
   ) -> Pipeline:
     transformers = get_transformers(model)
     if incremental:
@@ -302,32 +312,34 @@ class TextClassifierBuilder:
     predictor.set_params(**params)
 
     sample_weights = get_sample_weights(y) if balanced_weights else None
-    predictor.fit(X_tfidf, y, sample_weight=sample_weights)
+    predictor.fit(X_tfidf, y, sample_weight=sample_weights)  # type: ignore
     if verbose:
-      y_pred = predictor.predict(X_tfidf)
+      y_pred = predictor.predict(X_tfidf)  # type: ignore
       print(f"train_accuracy={accuracy_score(y, y_pred):.3f}")
     return model
 
-  def _create_feature_extractor(self, trial: optuna.Trial) -> FeatureExtractor:
+  def _create_feature_extractor(self, trial: optuna.Trial) -> TfidfVectorizer:
     return TfidfVectorizer(
       lowercase=False, tokenizer=self._tokenize,
-      token_pattern=None, ngram_range=(1, 2),
-      min_df=1e-3, max_df=0.5,
-      norm=None,
+      token_pattern=None, ngram_range=(1, 2),  # type: ignore
+      min_df=1e-3, max_df=0.5,  # type: ignore
+      norm=None,  # type: ignore
     )
 
   def _create_feature_selector(self, trial: optuna.Trial) -> FeatureSelector:
+    if self._context is None:
+      raise ValueError(f"Context is None.")
     feature_selector_type = classification().feature_selector_type
     if feature_selector_type == "model":
       return SelectFromModel(self._context.feature_estimator, threshold=1e-5)
     elif feature_selector_type == "svd":
       n_components = trial.suggest_int(
         "n_components",
-        1, min(self._context.feature_estimator.n_features_in_, 1000),
+        1, min(self._context.feature_estimator.n_features_in_, 1000),  # type: ignore
       )
       return make_pipeline(
         TruncatedSVD(n_components=n_components,
-                     random_state=misc().random_seed),
+                     random_state=misc().random_seed),  # type: ignore
         Normalizer(copy=False),
       )
     else:
@@ -336,9 +348,11 @@ class TextClassifierBuilder:
       )
 
   def _create_predictor_data(self, trial: optuna.Trial) -> PipelineStep:
-    pass
+    return PipelineStep()
 
   def _tokenize(self, message: str) -> list[str]:
+    if self._context is None:
+      raise ValueError(f"Context is None.")
     tokens = message.lower().split()
     return [
       self._context.stemmer.stem(token)

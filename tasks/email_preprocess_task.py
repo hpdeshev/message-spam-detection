@@ -35,15 +35,17 @@ def _parse_dataset_from_tarfile(
 ) -> None:
   for tarobj in tar.getmembers()[1:]:
     if not tarobj.name.endswith("cmds"):
-      with tar.extractfile(tarobj) as file:
-        message = parser.parse(file)
+      file = tar.extractfile(tarobj)
+      if file is not None:
+        message = parser.parse(file)  # type: ignore
         content = _parse_data(
           _parse_payload(message),
           message.get_content_type(),
         )
-        spam_data["message"].append(content.replace("\x00", ""))
-        spam_data["type"].append("email")
-        spam_data["is_spam"].append(int(is_spam))
+        spam_data["message"] += [content.replace("\x00", "")]
+        spam_data["type"] += ["email"]
+        spam_data["is_spam"] += [int(is_spam)]
+        file.close()
 
 
 def _parse_data(
@@ -74,11 +76,12 @@ def _parse_payload(email: Message) -> list[Message] | str:
     payload = email.get_payload(decode=False)
   else:
     try:
-      payload = email.get_payload(decode=True).decode("unicode_escape")
+      payload = email.get_payload(decode=True)
+      payload = payload.decode("unicode_escape")  # type: ignore
     except Exception as e:
       print("parse_payload:", e, sep="\n")
       payload = email.get_payload(decode=False)
-  return payload
+  return payload  # type: ignore
 
 
 class EmailPreprocessTask(luigi.Task):
@@ -92,7 +95,7 @@ class EmailPreprocessTask(luigi.Task):
   """
 
   @override
-  def requires(self):
+  def requires(self):  # type: ignore
     return MessageRetrievalTask(
       _ALL_FILES, "data", _URL
     )
@@ -111,7 +114,7 @@ class EmailPreprocessTask(luigi.Task):
     spam_df.to_csv(self.output().path)
 
   @override
-  def output(self):
+  def output(self):  # type: ignore
     return luigi.LocalTarget(
       Path() / "data" / "email_spam_data.csv"
     )
