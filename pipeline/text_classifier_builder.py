@@ -198,6 +198,10 @@ class TextClassifierBuilder:
 
     Returns:
       A trained `BoW` classifier pipeline.
+
+    Raises:
+      ValueError: Various input arguments are incorrectly
+      passed as *None*.
     """
     model = None
     if Path.exists(Path(saved_model_path)):
