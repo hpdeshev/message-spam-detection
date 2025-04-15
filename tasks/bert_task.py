@@ -4,15 +4,24 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import datasets
+import evaluate
 import luigi
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-import tensorflow as tf
-import tf_keras
-import tf_keras.models as tf_models
-import transformers
+from sklearn.utils.class_weight import compute_class_weight
+import torch
+import torch.nn as nn
+from transformers import (
+  AutoConfig, DataCollatorWithPadding,
+  EarlyStoppingCallback,
+  TrainingArguments, Trainer,
+)
+from transformers.modeling_outputs import SequenceClassifierOutput
+from transformers.models.bert import (
+  BertForSequenceClassification, BertTokenizer
+)
+from transformers.trainer_utils import EvalPrediction
 from typing_extensions import Any, override
 
 from common.config import classification, misc
@@ -91,14 +100,20 @@ class BertTask(luigi.Task):
 
   1. A `BoW` dataset is obtained via the `get_bow_dataset` function;
   2. The `BoW` dataset is split into subsets for training and test;
-  3. A `BERT` `Keras` model is loaded;
-  4. The `BERT` model is compiled with learning rate scheduling and
-     an optimizer;
-  5. A `BERT` tokenizer wrapper tokenizes and dynamically pads the
+  3. A `BERT` `PyTorch` model is loaded;
+  4. A `BERT` tokenizer tokenizes and dynamically pads the
      training and test data in preparation for training and evaluation;
-  6. The `BERT` model is trained with class weighting, validation set and
+  5. The `BERT` model is trained with class weighting, validation set and
      early stopping;
-  7. The `BERT` model is saved.
+  6. The `BERT` model is persisted.
+
+  To support straightforward comparison between `BERT` and `BoW` classifiers:
+  - `WordPiece` tokenization is not used and the saved at `vocab_filepath`
+    output from the `get_bow_vocabulary` function is directly used instead;
+  - a *not* pretrained model with `BERT` architecture is used, meaning that
+    the embedding matrix is as per the `BoW` vocabulary, i.e., the matrix may
+    not be used entirely and the token indices have different meaning compared
+    to the original `BERT`.
   """
 
   max_input_tokens = luigi.IntParameter(128)
@@ -133,77 +148,97 @@ class BertTask(luigi.Task):
       train_df.message, train_df.is_spam,
     )
 
-    (X_train, X_val,
-     y_train, y_val) = train_test_split(
-      bert_train_df.message, bert_train_df.is_spam,
+    tokenizer = BertTokenizer(
+      vocab_filepath, model_max_length=self.max_input_tokens
+    )
+    dataset = datasets.Dataset.from_pandas(bert_train_df)
+    dataset = dataset.class_encode_column("is_spam")
+    dataset = dataset.train_test_split(
       test_size=classification().validation_split,  # type: ignore
-      random_state=misc().random_seed, shuffle=True,  # type: ignore
-      stratify=bert_train_df.is_spam,
+      seed=misc().random_seed, shuffle=True,  # type: ignore
+      stratify_by_column="is_spam",
     )
-
-    batch_size = 32
-    max_epochs = 20
-    max_epochs_no_change = 3
-    batches_per_epoch = len(y_train) // batch_size
-    total_train_steps = int(batches_per_epoch * max_epochs)
-    optimizer, _ = transformers.create_optimizer(
-      init_lr=5e-5, num_warmup_steps=0, num_train_steps=total_train_steps
+    def preprocess(
+      data: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+      return {
+        "input_ids": tokenizer(
+                      data["message"], truncation=True
+                     )["input_ids"],
+        "labels": data["is_spam"],
+      }
+    train_ds = dataset["train"].map(preprocess, batched=True)
+    val_ds = dataset["test"].map(preprocess, batched=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    model = BertForSequenceClassification(
+      AutoConfig.from_pretrained(self.model_name),  # type: ignore
     )
-
-    classifier = \
-      transformers.TFAutoModelForSequenceClassification.from_pretrained(
-        self.model_name,  # type: ignore
-        num_labels=2,
-        id2label={0 : "Ham", 1 : "Spam"},
-        label2id={"Ham": 0, "Spam": 1},
-      )
-    classifier.build()
-    classifier.summary()
-    classifier.compile(optimizer=optimizer, metrics=["accuracy"])
-    preprocessor = BertPreprocessor(vocab_filepath,
-                                    self.max_input_tokens)  # type: ignore
-
-    train_set = datasets.Dataset.from_pandas(
-      pd.concat([X_train, y_train], axis=1)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)  # type: ignore
+    training_args = TrainingArguments(
+      output_dir=self.output()["bert_classifier_model"].path,
+      learning_rate=2e-5,
+      per_device_train_batch_size=16,
+      per_device_eval_batch_size=16,
+      weight_decay=0.01,
+      eval_strategy="epoch",
+      save_strategy="epoch",
+      save_total_limit=1,
+      seed=misc().random_seed,  # type: ignore
+      load_best_model_at_end=True,
+      report_to=["tensorboard"],
+      push_to_hub=False,
+      num_train_epochs=100,
     )
-    tokenized_train_set = preprocessor.to_tf_dataset(
-      classifier, train_set, shuffle=True
+    accuracy = evaluate.load("accuracy")
+    def compute_metrics(
+      eval_pred: EvalPrediction
+    ) -> dict[str, float]:
+      predictions, labels = eval_pred
+      predictions = np.argmax(predictions, axis=1)
+      result = accuracy.compute(predictions=predictions, references=labels)
+      if result is None:
+        raise EnvironmentError(
+          "Accuracy module not run on the main process."
+        )
+      return result
+    classes = np.unique(train_df.is_spam)
+    class CustomTrainer(Trainer):
+      def compute_loss(
+        self,
+        model: BertForSequenceClassification,
+        inputs: dict[str, Any],
+        return_outputs: bool = False,
+        num_items_in_batch: int | None = None,
+      ) -> tuple[torch.Tensor, SequenceClassifierOutput] | torch.Tensor:
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        class_weights = compute_class_weight(
+          class_weight="balanced",
+          classes=classes,
+          y=train_df.is_spam,
+        )
+        loss_fct = nn.CrossEntropyLoss(
+          weight=torch.tensor(
+            class_weights, device=model.device, dtype=torch.float32
+          )
+        )
+        loss = loss_fct(logits.view(-1, model.config.num_labels),
+                        labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
+    trainer = CustomTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_ds,
+        eval_dataset=val_ds,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )
-
-    val_set = datasets.Dataset.from_pandas(
-      pd.concat([X_val, y_val], axis=1)
-    )
-    tokenized_val_set = preprocessor.to_tf_dataset(
-      classifier, val_set
-    )
-
-    class_weight=dict(enumerate(
-      len(y_train) / (2 * np.bincount(y_train))
-    ))
-    best_val_loss = None
-    n_epoch, n_epoch_no_change, is_looping = 0, 0, True
-    while is_looping and (n_epoch < max_epochs):
-      history = classifier.fit(
-        tokenized_train_set,
-        validation_data=tokenized_val_set,
-        class_weight=class_weight,
-      )
-      val_loss = history.history["val_loss"][-1]
-      if best_val_loss is None:
-        best_val_loss = val_loss
-      else:
-        if best_val_loss < val_loss:
-          n_epoch_no_change += 1
-          print(f"{n_epoch_no_change} epoch(s) without improvement.")
-          if n_epoch_no_change == max_epochs_no_change:
-            print(f"Reached {n_epoch_no_change} epoch(s) "
-                  "without improvement.")
-            is_looping = False
-        else:
-          n_epoch_no_change = 0
-          best_val_loss = val_loss
-      n_epoch += 1
-    classifier.save_pretrained(self.output()["bert_classifier_model"].path)
+    trainer.train()
+    trainer.save_model()
+    print(trainer.evaluate())
 
   @override
   def output(self):  # type: ignore
@@ -213,65 +248,3 @@ class BertTask(luigi.Task):
       "bert_classifier_vocab":
         luigi.LocalTarget(Path() / "models" / "bert_classifier" / "vocab.txt"),
     }
-
-
-class BertPreprocessor:
-  """Wrapper for a `BERT` preprocessor from Hugging Face Transformers.
-  
-  To support straightforward comparison between `BERT` and `BoW` classifiers,
-  `WordPiece` tokenization is not used and the saved at `vocab_filepath`
-  output from the `get_bow_vocabulary` function is directly used instead.
-  The latter approach, implemented via the `transformers.BertTokenizer` class,
-  avoids tokenization divergence due to stemmed or unusual word-tokens
-  additionally split into sub-tokens via the `WordPiece` method.
-
-  Data collation for dynamic batch-based padding is used.
-  """
-
-  def __init__(
-    self,
-    vocab_filepath: Path,
-    max_input_tokens: int,
-  ):
-    self._tokenizer = transformers.BertTokenizer(
-      vocab_filepath, model_max_length=max_input_tokens
-    )
-    self._data_collator = transformers.DataCollatorWithPadding(
-      tokenizer=self._tokenizer, return_tensors="tf"
-    )
-
-  @property
-  def tokenizer(self):
-    return self._tokenizer
-
-  def to_tf_dataset(
-    self,
-    bert_classifier: tf_models.Model,
-    hf_dataset: datasets.Dataset,
-    batched: bool = True,
-    batch_size: int = 32,
-    shuffle: bool = False,
-  ) -> tf.data.Dataset:
-    tokenized_dataset = hf_dataset.map(self._preprocess, batched=batched)
-    tokenized_dataset = bert_classifier.prepare_tf_dataset(
-      tokenized_dataset,
-      shuffle=shuffle,
-      batch_size=batch_size,
-      collate_fn=self._data_collator,
-    )
-    return tokenized_dataset
-
-  def _preprocess(
-    self,
-    data: Mapping[str, Any],
-  ) -> Mapping[str, Any]:
-    result = {
-      "input_ids": self._tokenizer(
-                     data["message"], truncation=True
-                   )["input_ids"],
-    }
-    if "is_spam" in data:
-      result.update({
-        "labels": data["is_spam"]
-      })
-    return result

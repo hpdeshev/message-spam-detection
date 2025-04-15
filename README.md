@@ -19,7 +19,7 @@ The message spam data is modeled in two different ways depending on the classifi
 - [word embeddings for neural natural language processing](https://en.wikipedia.org/wiki/Word_embedding)
 
 The implementation of the `BoW` classifiers is based on [Scikit-learn](https://scikit-learn.org/stable/getting_started.html).
-The implementation of the `BERT` classifier is based on [Hugging Face Transformers](https://huggingface.co/docs/transformers/index) and [TensorFlow](https://www.tensorflow.org/learn).
+The implementation of the `BERT` classifier is based on [Hugging Face Transformers](https://huggingface.co/docs/transformers/index) and [PyTorch](https://pytorch.org/get-started/locally).
 
 ## File structure
 ### Folders (packages)
