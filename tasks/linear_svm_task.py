@@ -35,9 +35,6 @@ class LinearSvmClassifierBuilder(SgdClassifierBuilder):
     if learning_rate == "optimal":
       alpha = trial.suggest_float("alpha", 1e-4, 1e-1, step=1e-4)
       eta0 = 0.0
-    elif learning_rate == "invscaling":
-      alpha = 1e-4
-      eta0 = trial.suggest_float("eta0", 1e1, 1e3, step=1)
     else:
       alpha = 1e-4
       eta0 = trial.suggest_float("eta0", 1e-4, 1e-1, step=1e-4)
