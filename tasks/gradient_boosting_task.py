@@ -53,8 +53,7 @@ class GradientBoostingTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path,  # type: ignore
-      index_col=0,
+      self.input()["train_test_split"]["train"].path  # type: ignore
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
