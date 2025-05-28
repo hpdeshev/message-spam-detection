@@ -25,8 +25,9 @@ from transformers.trainer_utils import EvalPrediction
 from typing_extensions import Any, override
 
 from common.config import classification, misc
-from common.types import TokenizerMethod
-from pipeline.text_classifier_builder import TextClassifierBuilder
+from pipeline.text_classifier_builder import (
+  FEATURE_DISCOVERY_METHODS, TextClassifierBuilder
+)
 from pipeline.utils import get_transformers
 from tasks.best_bow_task import BestBowTask
 from tasks.train_test_split_task import TrainTestSplitTask
@@ -46,10 +47,16 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
     A set of `BoW` vocabulary items.
   """
   bow_vocabulary = set()
-  feature_names = [name.split("TF-IDF__")[1]
+  feature_names = [name.removeprefix("TF-IDF__")
                    for name in (get_transformers(bow_classifier)
                                 .get_feature_names_out())
                    if name.startswith("TF-IDF__")]
+  custom_feature_names = [
+    method[0] for method in (bow_classifier
+                             .named_steps["Features"]["Custom TF-IDF"]
+                             .named_steps["customfeatureextractor"].methods)
+  ]
+  feature_names += custom_feature_names
   for name in feature_names:
     ngrams = name.split()
     if len(ngrams) > 1:
@@ -60,8 +67,8 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
 
 
 def get_bow_dataset(
+  bow_classifier: Pipeline,
   bow_vocabulary: set[str],
-  bow_tokenizer: TokenizerMethod,
   X: Iterable[str],
   y: Iterable[int],
 ) -> pd.DataFrame:
@@ -72,8 +79,8 @@ def get_bow_dataset(
   thus their results on the dataset can be compared.
 
   Args:
+    bow_classifier: A `Scikit-learn` pipeline.
     bow_vocabulary: A set of `BoW` vocabulary items.
-    bow_tokenizer: A tokenizer function.
     X: The messages.
     y: The ham/spam labels.
 
@@ -81,14 +88,25 @@ def get_bow_dataset(
     A `Pandas` data frame.
   """
   dataset = {"message": [], "is_spam": []}
+  feature_discovery_methods = [
+    method
+    for method in (bow_classifier
+                   .named_steps["Features"]["Custom TF-IDF"]
+                   .named_steps["customfeatureextractor"].methods)
+  ]
   for message, is_spam in zip(X, y):
-    dataset["message"] += [
-      " ".join([
-        token
-        for token in bow_tokenizer(message)
-        if token in bow_vocabulary
-      ])
-    ]
+    tokens = []
+    for token in message.lower().split():
+      bow_token = (bow_classifier
+                   .named_steps["Features"]["TF-IDF"]
+                   .tokenizer(token))
+      bow_token = bow_token[0] if bow_token else token
+      if bow_token in bow_vocabulary:
+        tokens += [bow_token]
+      for feature, checker in feature_discovery_methods:
+        if checker([bow_token]):
+          tokens += [feature]
+    dataset["message"] += [" ".join(tokens)]
     dataset["is_spam"] += [is_spam]
   return pd.DataFrame(dataset)
 
@@ -139,17 +157,17 @@ class BertTask(luigi.Task):
     vocab_filepath.write_text("\n".join([item for item in bow_vocabulary]))
 
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path,  # type: ignore
-      index_col=0,
+      self.input()["train_test_split"]["train"].path  # type: ignore
     )
     bert_train_df = get_bow_dataset(
-      bow_vocabulary,
-      bow_classifier.named_steps["Features"]["TF-IDF"].tokenizer,
+      bow_classifier, bow_vocabulary,
       train_df.message, train_df.is_spam,
     )
 
     tokenizer = BertTokenizer(
-      vocab_filepath, model_max_length=self.max_input_tokens
+      vocab_filepath,
+      model_max_length=self.max_input_tokens,
+      do_basic_tokenize=False,
     )
     dataset = datasets.Dataset.from_pandas(bert_train_df)
     dataset = dataset.class_encode_column("is_spam")
@@ -171,7 +189,7 @@ class BertTask(luigi.Task):
     val_ds = dataset["test"].map(preprocess, batched=True)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     model = BertForSequenceClassification(
-      AutoConfig.from_pretrained(self.model_name),  # type: ignore
+      AutoConfig.from_pretrained(self.model_name)  # type: ignore
     )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)  # type: ignore
@@ -228,13 +246,13 @@ class BertTask(luigi.Task):
                         labels.view(-1))
         return (loss, outputs) if return_outputs else loss
     trainer = CustomTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_ds,
-        eval_dataset=val_ds,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
+      model=model,
+      args=training_args,
+      train_dataset=train_ds,
+      eval_dataset=val_ds,
+      data_collator=data_collator,
+      compute_metrics=compute_metrics,
+      callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )
     trainer.train()
     trainer.save_model()

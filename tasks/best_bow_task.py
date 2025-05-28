@@ -66,8 +66,7 @@ class BestBowTask(luigi.Task):
   @override
   def run(self):
     test_df = pd.read_csv(
-      self.input()["train_test_split"]["test"].path,  # type: ignore
-      index_col=0,
+      self.input()["train_test_split"]["test"].path  # type: ignore
     )
 
     classifier_scores = {}

@@ -47,16 +47,14 @@ class TrainTestSplitTask(luigi.Task):
     datasets = []
     if self.email:
       email_spam_df = pd.read_csv(
-        self.input()["email"].path,  # type: ignore
-        index_col=0,
+        self.input()["email"].path  # type: ignore
       )
       if not self.duplicates:
         email_spam_df = email_spam_df.drop_duplicates()
       datasets += [email_spam_df]
     if self.sms:
       sms_spam_df = pd.read_csv(
-        self.input()["sms"].path,  # type: ignore
-        index_col=0,
+        self.input()["sms"].path  # type: ignore
       )
       if not self.duplicates:
         sms_spam_df = sms_spam_df.drop_duplicates()
@@ -75,9 +73,9 @@ class TrainTestSplitTask(luigi.Task):
 
     output = self.output()
     train_df = pd.concat([X_train, y_train], axis=1)
-    train_df.to_csv(output["train"].path)
+    train_df.to_csv(output["train"].path, index=False)
     test_df = pd.concat([X_test, y_test], axis=1)
-    test_df.to_csv(output["test"].path)
+    test_df.to_csv(output["test"].path, index=False)
 
   @override
   def output(self):  # type: ignore

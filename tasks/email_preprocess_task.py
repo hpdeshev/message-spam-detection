@@ -111,7 +111,7 @@ class EmailPreprocessTask(luigi.Task):
           parser, tar, is_spam, spam_data
         )
     spam_df = pd.DataFrame(spam_data)
-    spam_df.to_csv(self.output().path)
+    spam_df.to_csv(self.output().path, index=False)
 
   @override
   def output(self):  # type: ignore

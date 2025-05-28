@@ -64,8 +64,7 @@ class LogisticRegressionTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path,  # type: ignore
-      index_col=0,
+      self.input()["train_test_split"]["train"].path  # type: ignore
     )
     nltk_task = self.requires()["nltk"]
     builder = LogisticRegressionClassifierBuilder(

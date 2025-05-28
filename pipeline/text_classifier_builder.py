@@ -44,13 +44,13 @@ def _select_feature_extraction_methods(
   X: pd.Series,
   y: pd.Series,
 ) -> FeatureExtractorMethodData:
-  """Selects a custom `TF-IDF` feature using `_ALL_FEATURE_EXTRACTION_METHODS`.
+  """Selects a custom `TF-IDF` feature using `_FEATURE_EXTRACTION_METHODS`.
   
   The custom `TF-IDF` feature is selected based on highest `chi-squared test`
   score with the target label.
   """
   pipe = make_pipeline(
-    CustomFeatureExtractor(_ALL_FEATURE_EXTRACTION_METHODS),
+    CustomFeatureExtractor(_FEATURE_EXTRACTION_METHODS),
     TfidfTransformer(norm=None),  # type: ignore
   )
   features = pipe.fit_transform(X, y)
@@ -61,31 +61,48 @@ def _select_feature_extraction_methods(
   print(feature_selector.scores_)
 
   return [
-    _ALL_FEATURE_EXTRACTION_METHODS[np.argmax(feature_selector.scores_)]
+    _FEATURE_EXTRACTION_METHODS[np.argmax(feature_selector.scores_)]
   ]
 
 
+def _is_currency(token: str) -> bool:
+  return (token[0] in _CURRENCY_SYMBOLS
+          or token[-1] in _CURRENCY_SYMBOLS)
+
+
+def _is_number(token: str) -> bool:
+  return (token.isnumeric()
+          and len(token) >= _MIN_DIGITS_IN_NUMBER)
+
+
+def _is_currency_or_number(token: str) -> bool:
+  return _is_currency(token) or _is_number(token)
+
+
 def _get_currency_count(tokens: Tokens) -> int:
-  return sum(1 for token in tokens
-             if token[0] in _CURRENCY_SYMBOLS or
-                token[-1] in _CURRENCY_SYMBOLS)
+  return sum(1 for token in tokens if _is_currency(token))
 
 
 def _get_numbers_count(tokens: Tokens) -> int:
-  return sum(1 for token in tokens
-             if token.isnumeric()
-                and len(token) >= _MIN_DIGITS_IN_NUMBER)
+  return sum(1 for token in tokens if _is_number(token))
 
 
 def _get_currency_numbers_count(tokens: Tokens) -> int:
   return _get_currency_count(tokens) + _get_numbers_count(tokens)
 
 
-_ALL_FEATURE_EXTRACTION_METHODS = [
-  ("currency_count", _get_currency_count),
-  ("numbers_count", _get_numbers_count),
-  ("currency_numbers_count", _get_currency_numbers_count),
+_FEATURE_EXTRACTION_METHODS = [
+  ("[CURRENCY]", _get_currency_count),
+  ("[NUMBER]", _get_numbers_count),
+  ("[CURRENCY_OR_NUMBER]", _get_currency_numbers_count),
 ]
+
+
+FEATURE_DISCOVERY_METHODS = {
+  "[CURRENCY]": _is_currency,
+  "[NUMBER]": _is_number,
+  "[CURRENCY_OR_NUMBER]": _is_currency_or_number,
+}
 
 
 class Context:
@@ -160,7 +177,7 @@ class TextClassifierBuilder:
     In order for the `BoW` approach to be applicable, the message spam data
     is tokenized via the `_tokenize` method. Then, `TF-IDF` vectorization is
     performed, including a custom `TF-IDF` feature that is selected based on
-    `_ALL_FEATURE_EXTRACTION_METHODS`. `TF-IDF` normalization is not done
+    `_FEATURE_EXTRACTION_METHODS`. `TF-IDF` normalization is not done
     in order to allow for a final normalization after the combination of
     regular and custom `TF-IDF` features.
 
@@ -254,9 +271,11 @@ class TextClassifierBuilder:
         ])
       )]
       if self._normalized_data:
-        estimators += [("Normalizer", Normalizer(copy=False))]
+        estimators += [("Normalizer",
+                        Normalizer(copy=False))]
       if self._context.feature_estimator is not None:
-        estimators += [("Feature Selector", self._create_feature_selector(trial=trial))]
+        estimators += [("Feature Selector",
+                        self._create_feature_selector(trial=trial))]
       estimators += [self._create_predictor_data(trial=trial)]
       classifier = Pipeline(estimators)
 
@@ -337,9 +356,9 @@ class TextClassifierBuilder:
     if feature_selector_type == "model":
       return SelectFromModel(self._context.feature_estimator, threshold=1e-5)
     elif feature_selector_type == "svd":
+      n_features = min(self._context.feature_estimator.n_features_in_, 1000)
       n_components = trial.suggest_int(
-        "n_components",
-        1, min(self._context.feature_estimator.n_features_in_, 1000),  # type: ignore
+        "n_components", 1, n_features  # type: ignore
       )
       return make_pipeline(
         TruncatedSVD(n_components=n_components,

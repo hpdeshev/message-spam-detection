@@ -57,7 +57,7 @@ class SmsPreprocessTask(luigi.Task):
       with ZipFile(Path() / "data" / file) as zfile:
         _parse_dataset_from_zipfile(zfile, spam_data)
     spam_df = pd.DataFrame(spam_data)
-    spam_df.to_csv(self.output().path)
+    spam_df.to_csv(self.output().path, index=False)
 
   @override
   def output(self):  # type: ignore
