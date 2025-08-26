@@ -19,7 +19,7 @@ from sklearn.pipeline import FeatureUnion, make_pipeline, Pipeline
 from sklearn.preprocessing import Normalizer
 from sklearn.utils import check_X_y
 
-from common.config import classification, misc
+from common.config import classification, misc, tokenization
 from common.types import (
   Tokens, FeatureExtractorMethodData,
   FeatureSelector, PipelineStep
@@ -36,8 +36,8 @@ _CROSS_VAL_SPLITS = 3
 _CURRENCY_SYMBOLS = "$£€"
 _MIN_DIGITS_IN_NUMBER = 3
 _OPTUNA_N_TRIALS = 30
-_PATTERN_STARTING_DIGIT = r"^[0-9]?[^\W\d_]+(?:[-'][^\W\d_]+)*$"
-_PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*(?:[-'][^\W\d_]+)*$"
+_PATTERN_STARTING_DIGIT = r"^[0-9]?[^\W\d_]+$"
+_PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*$"
 
 
 def _select_feature_extraction_methods(
@@ -376,7 +376,10 @@ class TextClassifierBuilder:
   def _tokenize(self, message: str) -> list[str]:
     if self._context is None:
       raise ValueError(f"Context is None.")
-    tokens = message.lower().split()
+    tokens = [token
+              for token in re.split(tokenization().regex_separators,
+                                    message.lower())
+              if token]
     return [
       self._context.stemmer.stem(token)
       for token in tokens
