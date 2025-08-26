@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+import re
 
 import datasets
 import evaluate
@@ -24,7 +25,7 @@ from transformers.models.bert import (
 from transformers.trainer_utils import EvalPrediction
 from typing_extensions import Any, override
 
-from common.config import classification, misc
+from common.config import classification, misc, tokenization
 from pipeline.text_classifier_builder import (
   FEATURE_DISCOVERY_METHODS, TextClassifierBuilder
 )
@@ -96,16 +97,18 @@ def get_bow_dataset(
   ]
   for message, is_spam in zip(X, y):
     tokens = []
-    for token in message.lower().split():
-      bow_token = (bow_classifier
-                   .named_steps["Features"]["TF-IDF"]
-                   .tokenizer(token))
-      bow_token = bow_token[0] if bow_token else token
-      if bow_token in bow_vocabulary:
-        tokens += [bow_token]
-      for feature, checker in feature_discovery_methods:
-        if checker([bow_token]):
-          tokens += [feature]
+    for token in re.split(tokenization().regex_separators,
+                          message.lower()):
+      if token:
+        bow_token = (bow_classifier
+                     .named_steps["Features"]["TF-IDF"]
+                     .tokenizer(token))
+        bow_token = bow_token[0] if bow_token else token
+        if bow_token in bow_vocabulary:
+          tokens += [bow_token]
+        for feature, checker in feature_discovery_methods:
+          if checker([bow_token]):
+            tokens += [feature]
     dataset["message"] += [" ".join(tokens)]
     dataset["is_spam"] += [is_spam]
   return pd.DataFrame(dataset)
