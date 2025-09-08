@@ -34,7 +34,7 @@ class DecisionTreeClassifierBuilder(TextClassifierBuilder):
     return "Decision Tree model", DecisionTreeClassifier(
       min_samples_leaf=min_samples_leaf,
       min_samples_split=min_samples_split,
-      random_state=misc().random_seed,  # type: ignore
+      random_state=misc().random_seed,
     )
 
 
@@ -42,7 +42,7 @@ class DecisionTreeTask(luigi.Task):
   """Outputs a `decision tree` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -52,11 +52,11 @@ class DecisionTreeTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path  # type: ignore
+      self.input()["feature_estimator"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = DecisionTreeClassifierBuilder(
@@ -72,7 +72,7 @@ class DecisionTreeTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "decision_tree_classifier.pkl"
     )

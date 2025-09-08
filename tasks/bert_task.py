@@ -34,6 +34,9 @@ from tasks.best_bow_task import BestBowTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_REGEX_SEPARATORS = str(tokenization().regex_separators)
+
+
 def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
   """Returns a `BoW` classifier's learned vocabulary as a set of tokens.
 
@@ -47,7 +50,7 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
   Returns:
     A set of `BoW` vocabulary items.
   """
-  bow_vocabulary = set()
+  bow_vocabulary: set[str] = set()
   feature_names = [name.removeprefix("TF-IDF__")
                    for name in (get_transformers(bow_classifier)
                                 .get_feature_names_out())
@@ -88,7 +91,9 @@ def get_bow_dataset(
   Returns:
     A `Pandas` data frame.
   """
-  dataset = {"message": [], "is_spam": []}
+  dataset: dict[str, list[str | int]] = {
+    "message": [], "is_spam": []
+  }
   feature_discovery_methods = [
     method
     for method in (bow_classifier
@@ -97,7 +102,7 @@ def get_bow_dataset(
   ]
   for message, is_spam in zip(X, y):
     tokens = []
-    for token in re.split(tokenization().regex_separators,
+    for token in re.split(_REGEX_SEPARATORS,
                           message.lower()):
       if token:
         bow_token = (bow_classifier
@@ -141,7 +146,7 @@ class BertTask(luigi.Task):
   model_name = luigi.Parameter("google/bert_uncased_L-2_H-128_A-2")
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "train_test_split": TrainTestSplitTask(),
       "vocab_provider": BestBowTask(),
@@ -151,7 +156,7 @@ class BertTask(luigi.Task):
   def run(self):
     bow_builder = TextClassifierBuilder()
     bow_classifier = bow_builder.build(
-      self.input()["vocab_provider"]["best_bow_classifier"].path  # type: ignore
+      self.input()["vocab_provider"]["best_bow_classifier"].path
     )
     bow_vocabulary = get_bow_vocabulary(bow_classifier)
 
@@ -160,7 +165,7 @@ class BertTask(luigi.Task):
     vocab_filepath.write_text("\n".join([item for item in bow_vocabulary]))
 
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     bert_train_df = get_bow_dataset(
       bow_classifier, bow_vocabulary,
@@ -175,8 +180,8 @@ class BertTask(luigi.Task):
     dataset = datasets.Dataset.from_pandas(bert_train_df)
     dataset = dataset.class_encode_column("is_spam")
     dataset = dataset.train_test_split(
-      test_size=classification().validation_split,  # type: ignore
-      seed=misc().random_seed, shuffle=True,  # type: ignore
+      test_size=classification().validation_split,
+      seed=misc().random_seed, shuffle=True,
       stratify_by_column="is_spam",
     )
     def preprocess(
@@ -192,10 +197,10 @@ class BertTask(luigi.Task):
     val_ds = dataset["test"].map(preprocess, batched=True)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     model = BertForSequenceClassification(
-      AutoConfig.from_pretrained(self.model_name)  # type: ignore
+      AutoConfig.from_pretrained(self.model_name)
     )
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)  # type: ignore
+    model.to(device)
     training_args = TrainingArguments(
       output_dir=self.output()["bert_classifier_model"].path,
       learning_rate=2e-5,
@@ -205,7 +210,7 @@ class BertTask(luigi.Task):
       eval_strategy="epoch",
       save_strategy="epoch",
       save_total_limit=1,
-      seed=misc().random_seed,  # type: ignore
+      seed=misc().random_seed,
       load_best_model_at_end=True,
       report_to=["tensorboard"],
       push_to_hub=False,
@@ -262,7 +267,7 @@ class BertTask(luigi.Task):
     print(trainer.evaluate())
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return {
       "bert_classifier_model":
         luigi.LocalTarget(Path() / "models" / "bert_classifier" / "model"),

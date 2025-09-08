@@ -45,14 +45,16 @@ class SmsPreprocessTask(luigi.Task):
   """
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return MessageRetrievalTask(
       _FILES, "data", _URL
     )
 
   @override
   def run(self):
-    spam_data = {"message": [], "type": [], "is_spam": []}
+    spam_data: dict[str, list[str | int]] = {
+      "message": [], "type": [], "is_spam": []
+    }
     for file in _FILES:
       with ZipFile(Path() / "data" / file) as zfile:
         _parse_dataset_from_zipfile(zfile, spam_data)
@@ -60,7 +62,7 @@ class SmsPreprocessTask(luigi.Task):
     spam_df.to_csv(self.output().path, index=False)
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "data" / "sms_spam_data.csv"
     )

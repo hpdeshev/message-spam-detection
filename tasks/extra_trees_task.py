@@ -30,7 +30,7 @@ class ExtraTreesClassifierBuilder(TextClassifierBuilder):
 
     return "Extra-trees model", ExtraTreesClassifier(
       n_estimators=n_estimators, oob_score=False,
-      n_jobs=-1, random_state=misc().random_seed,  # type: ignore
+      n_jobs=-1, random_state=misc().random_seed,
       warm_start=True,
     )
 
@@ -38,7 +38,7 @@ class ExtraTreesTask(luigi.Task):
   """Outputs an `extra trees` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -48,11 +48,11 @@ class ExtraTreesTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path  # type: ignore
+      self.input()["feature_estimator"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = ExtraTreesClassifierBuilder(
@@ -68,7 +68,7 @@ class ExtraTreesTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "extra_trees_classifier.pkl"
     )

@@ -10,6 +10,9 @@ from common.config import tokenization
 from common.types import FeatureExtractorMethod, FeatureExtractorMethodData
 
 
+_REGEX_SEPARATORS = str(tokenization().regex_separators)
+
+
 class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
   """Implements custom feature extraction as part of a `Scikit-learn` pipeline.
 
@@ -47,7 +50,7 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
   ) -> list[int]:
     return [
       method([token
-              for token in re.split(tokenization().regex_separators,
+              for token in re.split(_REGEX_SEPARATORS,
                                     message.lower())
               if token])
       for message in messages
