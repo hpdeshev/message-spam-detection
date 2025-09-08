@@ -17,7 +17,6 @@ from tasks.decision_tree_task import DecisionTreeTask
 from tasks.extra_trees_task import ExtraTreesTask
 from tasks.gradient_boosting_task import GradientBoostingTask
 from tasks.linear_svm_task import LinearSvmTask
-from tasks.logistic_regression_task import LogisticRegressionTask
 from tasks.naive_bayes_task import NaiveBayesTask
 from tasks.poly_svm_task import PolySvmTask
 from tasks.random_forest_task import RandomForestTask
@@ -46,7 +45,7 @@ class BestBowTask(luigi.Task):
   """
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "train_test_split": TrainTestSplitTask(),
       "ada_boost": AdaBoostTask(),
@@ -55,7 +54,6 @@ class BestBowTask(luigi.Task):
       "gradient_boosting": GradientBoostingTask(),
       "naive_bayes": NaiveBayesTask(),
       "linear_svm": LinearSvmTask(),
-      "logistic_regression": LogisticRegressionTask(),
       "rbf_svm": RbfSvmTask(),
       "poly_svm": PolySvmTask(),
       "random_forest": RandomForestTask(),
@@ -66,10 +64,10 @@ class BestBowTask(luigi.Task):
   @override
   def run(self):
     test_df = pd.read_csv(
-      self.input()["train_test_split"]["test"].path  # type: ignore
+      self.input()["train_test_split"]["test"].path
     )
 
-    classifier_scores = {}
+    classifier_scores: dict[str, ClassificationReport] = {}
     for name, _ in list(self.requires().items())[1:]:
       classifier_scores[name] = self._get_scores(
         name, test_df.message, test_df.is_spam
@@ -122,7 +120,7 @@ class BestBowTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return {
       "bow_classifier_scores":
         luigi.LocalTarget(Path() / "figures" / "bow_classifier_scores.png"),
@@ -137,14 +135,14 @@ class BestBowTask(luigi.Task):
     y: pd.Series,
   ) -> ClassificationReport:
     classifier = TextClassifierBuilder().build(
-      self.input()[input_name].path  # type: ignore
+      self.input()[input_name].path
     )
     return classification_report(
       y, classifier.predict(X),
       labels=[0, 1],
       target_names=["Ham", "Spam"],
       digits=3, output_dict=True,
-      zero_division=np.nan,  # type: ignore
+      zero_division=np.nan,
     )
 
 

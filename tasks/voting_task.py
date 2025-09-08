@@ -57,7 +57,7 @@ class VotingTask(luigi.Task):
   """Outputs a `voting` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -72,31 +72,31 @@ class VotingTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path  # type: ignore
+      self.input()["feature_estimator"].path
     )
     linear_svm_builder = LinearSvmClassifierBuilder()
     linear_svm_classifier = linear_svm_builder.build(
-      self.input()["linear_svm"].path  # type: ignore
+      self.input()["linear_svm"].path
     )
     rbf_svm_builder = RbfSvmClassifierBuilder()
     rbf_svm_classifier = rbf_svm_builder.build(
-      self.input()["rbf_svm"].path  # type: ignore
+      self.input()["rbf_svm"].path
     )
     poly_svm_builder = PolySvmClassifierBuilder()
     poly_svm_classifier = poly_svm_builder.build(
-      self.input()["poly_svm"].path  # type: ignore
+      self.input()["poly_svm"].path
     )
     random_forest_builder = RandomForestClassifierBuilder()
     random_forest_classifier = random_forest_builder.build(
-      self.input()["random_forest"].path  # type: ignore
+      self.input()["random_forest"].path
     )
     extra_trees_builder = ExtraTreesClassifierBuilder()
     extra_trees_classifier = extra_trees_builder.build(
-      self.input()["extra_trees"].path  # type: ignore
+      self.input()["extra_trees"].path
     )
 
     voting_estimators = list(
@@ -124,7 +124,7 @@ class VotingTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "voting_classifier.pkl"
     )

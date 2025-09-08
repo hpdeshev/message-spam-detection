@@ -53,10 +53,10 @@ def _parse_data(message: EmailMessage) -> str:
         continue
     content_type = part.get_content_type()
     if content_type == "text/plain":
-      payload = part.get_payload()
+      payload = str(part.get_payload())
       content += [payload]
     elif content_type == "text/html":
-      payload = part.get_payload()
+      payload = str(part.get_payload())
       content += [bs4.BeautifulSoup(payload, "html.parser").get_text()]
     else:
       pass
@@ -74,14 +74,16 @@ class EmailPreprocessTask(luigi.Task):
   """
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return MessageRetrievalTask(
       _ALL_FILES, "data", _URL
     )
 
   @override
   def run(self):
-    spam_data = {"message": [], "type": [], "is_spam": []}
+    spam_data: dict[str, list[str | int]] = {
+      "message": [], "type": [], "is_spam": []
+    }
     for file in _ALL_FILES:
       is_spam = file in _SPAM_FILES
       with tar_open(Path() / "data" / file, mode="r:bz2") as tar:
@@ -92,7 +94,7 @@ class EmailPreprocessTask(luigi.Task):
     spam_df.to_csv(self.output().path, index=False)
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "data" / "email_spam_data.csv"
     )

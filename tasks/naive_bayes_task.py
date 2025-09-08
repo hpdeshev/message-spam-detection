@@ -39,7 +39,7 @@ class NaiveBayesTask(luigi.Task):
   """Outputs a `naive Bayes` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -48,7 +48,7 @@ class NaiveBayesTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = NaiveBayesClassifierBuilder(
@@ -63,7 +63,7 @@ class NaiveBayesTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "naive_bayes_classifier.pkl"
     )

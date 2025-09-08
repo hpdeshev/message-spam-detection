@@ -7,7 +7,7 @@ from sklearn.pipeline import Pipeline
 from typing_extensions import TypeAlias
 
 
-ClassificationReport: TypeAlias = str | dict
+ClassificationReport: TypeAlias = dict[str, dict[str, float] | float]
 ClassWeights: TypeAlias = dict[int, float]
 Tokens: TypeAlias = list[str]
 FeatureExtractor: TypeAlias = BaseEstimator

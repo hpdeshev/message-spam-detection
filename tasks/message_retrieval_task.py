@@ -22,7 +22,7 @@ class MessageRetrievalTask(luigi.Task):
     for filepath in self.output():
       if not filepath.exists():
         response = requests.get(
-          self.message_url + os.path.basename(filepath.path)  # type: ignore
+          self.message_url + os.path.basename(filepath.path)
         )
         fileobj = io.BytesIO(response.content)
         with filepath.open("w") as f:
@@ -32,7 +32,7 @@ class MessageRetrievalTask(luigi.Task):
   def output(self):
     return [
       luigi.LocalTarget(
-        Path() / self.message_folder / file,  # type: ignore
+        Path() / self.message_folder / file,
         format=luigi.format.Nop,
       )
       for file in self.message_files  # type: ignore

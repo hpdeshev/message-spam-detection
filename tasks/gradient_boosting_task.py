@@ -33,8 +33,8 @@ class GradientBoostingClassifierBuilder(TextClassifierBuilder):
       "Gradient Boosting model", GradientBoostingClassifier(
         learning_rate=0.1, n_estimators=n_estimators,
         subsample=subsample, n_iter_no_change=5,
-        validation_fraction=classification().validation_split,  # type: ignore
-        random_state=misc().random_seed, warm_start=True,  # type: ignore
+        validation_fraction=classification().validation_split,
+        random_state=misc().random_seed, warm_start=True,
       )
     )
 
@@ -43,7 +43,7 @@ class GradientBoostingTask(luigi.Task):
   """Outputs a `gradient boosting` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -53,11 +53,11 @@ class GradientBoostingTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path  # type: ignore
+      self.input()["feature_estimator"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = GradientBoostingClassifierBuilder(
@@ -73,7 +73,7 @@ class GradientBoostingTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "gradient_boosting_classifier.pkl"
     )

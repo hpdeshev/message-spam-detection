@@ -8,6 +8,7 @@ class misc(luigi.Config):
 
 
 class tokenization(luigi.Config):
+  currencies = luigi.Parameter("$£€")
   regex_separators = luigi.Parameter(r"[^\w$£€]+")
 
 

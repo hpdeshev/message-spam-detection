@@ -52,7 +52,7 @@ class SgdClassifierBuilder(TextClassifierBuilder):
      y_train, y_val) = train_test_split(
       X_tfidf, y,
       test_size=predictor_params["validation_fraction"],
-      random_state=misc().random_seed, shuffle=True,  # type: ignore
+      random_state=misc().random_seed, shuffle=True,
       stratify=y,
     )
     sample_weights = (
@@ -61,18 +61,18 @@ class SgdClassifierBuilder(TextClassifierBuilder):
     best_val_loss, last_good_model = None, copy.deepcopy(model)
     n_iter, n_iter_no_change, is_looping = 0, 0, True
     while is_looping and (n_iter < max_iter):
-      predictor.partial_fit(  # type: ignore
+      predictor.partial_fit(
         X_train, y_train,
         classes=np.unique(y_train),
         sample_weight=sample_weights,
       )
       if predictor_params["loss"] == "hinge":
         val_loss = hinge_loss(
-          y_val, predictor.decision_function(X_val)  # type: ignore
+          y_val, predictor.decision_function(X_val)
         )
       else:
         val_loss = log_loss(
-          y_val, predictor.predict_proba(X_val)[:, 1]  # type: ignore
+          y_val, predictor.predict_proba(X_val)[:, 1]
         )
       if best_val_loss is None:
         best_val_loss = val_loss
@@ -91,10 +91,10 @@ class SgdClassifierBuilder(TextClassifierBuilder):
           last_good_model = copy.deepcopy(model)
       if verbose:
         train_acc = accuracy_score(
-          y_train, predictor.predict(X_train)  # type: ignore
+          y_train, predictor.predict(X_train)
         )
         val_acc = accuracy_score(
-          y_val, predictor.predict(X_val)  # type: ignore
+          y_val, predictor.predict(X_val)
         )
         print(f"train_accuracy={train_acc:.3f}, "
               f"val_accuracy={val_acc:.3f}, "

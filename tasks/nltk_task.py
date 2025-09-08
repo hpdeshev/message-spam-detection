@@ -48,7 +48,7 @@ class NltkTask(luigi.Task):
     ]
 
   @property
-  def all_names(self):
+  def all_names(self) -> set[str]:
     if not hasattr(self, "_all_names"):
       self._all_names = set([
         word.lower() for word in nltk.corpus.names.words()
@@ -56,7 +56,7 @@ class NltkTask(luigi.Task):
     return self._all_names
 
   @property
-  def all_english_words(self):
+  def all_english_words(self) -> set[str]:
     if not hasattr(self, "_all_english_words"):
       self._all_english_words = set([
         word.lower()
@@ -65,7 +65,7 @@ class NltkTask(luigi.Task):
     return self._all_english_words
 
   @property
-  def all_stopwords(self):
+  def all_stopwords(self) -> set[str]:
     if not hasattr(self, "_all_stopwords"):
       self._all_stopwords = set([
         word.lower() for word in nltk.corpus.stopwords.words()
@@ -73,7 +73,7 @@ class NltkTask(luigi.Task):
     return self._all_stopwords
 
   @property
-  def stemmer(self):
+  def stemmer(self) -> nltk.PorterStemmer:
     if not hasattr(self, "_stemmer"):
       self._stemmer = nltk.PorterStemmer()
     return self._stemmer

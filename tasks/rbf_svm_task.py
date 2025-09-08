@@ -27,8 +27,8 @@ class RbfSvmClassifierBuilder(TextClassifierBuilder):
     gamma = trial.suggest_float("gamma", 1e-2, 1, step=1e-2)
 
     return "RBF SVM model", SVC(
-      C=C, kernel="rbf", gamma=gamma,  # type: ignore
-      probability=False, random_state=misc().random_seed,  # type: ignore
+      C=C, kernel="rbf", gamma=gamma,
+      probability=False, random_state=misc().random_seed,
     )
 
 
@@ -36,7 +36,7 @@ class RbfSvmTask(luigi.Task):
   """Outputs an `RBF SVM` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -46,11 +46,11 @@ class RbfSvmTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     logistic_regression_builder = LogisticRegressionClassifierBuilder()
     logistic_regression_classifier = logistic_regression_builder.build(
-      self.input()["feature_estimator"].path  # type: ignore
+      self.input()["feature_estimator"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = RbfSvmClassifierBuilder(
@@ -66,7 +66,7 @@ class RbfSvmTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "rbf_svm_classifier.pkl"
     )

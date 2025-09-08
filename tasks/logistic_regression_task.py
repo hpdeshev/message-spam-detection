@@ -45,8 +45,8 @@ class LogisticRegressionClassifierBuilder(SgdClassifierBuilder):
       loss="log_loss",
       alpha=alpha, learning_rate=learning_rate, eta0=eta0,
       early_stopping=True, n_iter_no_change=5,
-      validation_fraction=classification().validation_split,  # type: ignore
-      shuffle=True, random_state=misc().random_seed,  # type: ignore
+      validation_fraction=classification().validation_split,
+      shuffle=True, random_state=misc().random_seed,
       warm_start=True,
     )
 
@@ -55,7 +55,7 @@ class LogisticRegressionTask(luigi.Task):
   """Outputs a `logistic regression` text classifier."""
 
   @override
-  def requires(self):  # type: ignore
+  def requires(self):
     return {
       "nltk": NltkTask(),
       "train_test_split": TrainTestSplitTask(),
@@ -64,7 +64,7 @@ class LogisticRegressionTask(luigi.Task):
   @override
   def run(self):
     train_df = pd.read_csv(
-      self.input()["train_test_split"]["train"].path  # type: ignore
+      self.input()["train_test_split"]["train"].path
     )
     nltk_task = self.requires()["nltk"]
     builder = LogisticRegressionClassifierBuilder(
@@ -79,7 +79,7 @@ class LogisticRegressionTask(luigi.Task):
     )
 
   @override
-  def output(self):  # type: ignore
+  def output(self):
     return luigi.LocalTarget(
       Path() / "models" / "logistic_regression_classifier.pkl"
     )

@@ -33,11 +33,14 @@ from tasks.utils import get_sample_weights
 
 _CROSS_VAL_FBETA = 0.5  # Spam precision favored.
 _CROSS_VAL_SPLITS = 3
-_CURRENCY_SYMBOLS = "$£€"
+_CURRENCY_SYMBOLS = str(tokenization().currencies)
+_FEATURE_SELECTOR_TYPE = str(classification().feature_selector_type)
 _MIN_DIGITS_IN_NUMBER = 3
 _OPTUNA_N_TRIALS = 30
 _PATTERN_STARTING_DIGIT = r"^[0-9]?[^\W\d_]+$"
 _PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*$"
+_RANDOM_SEED = int(misc().random_seed)  # type: ignore
+_REGEX_SEPARATORS = str(tokenization().regex_separators)
 
 
 def _select_feature_extraction_methods(
@@ -50,12 +53,12 @@ def _select_feature_extraction_methods(
   score with the target label.
   """
   pipe = make_pipeline(
-    CustomFeatureExtractor(_FEATURE_EXTRACTION_METHODS),
-    TfidfTransformer(norm=None),  # type: ignore
+    CustomFeatureExtractor(_FEATURE_EXTRACTION_METHODS),  # type: ignore
+    TfidfTransformer(norm=None),
   )
   features = pipe.fit_transform(X, y)
-  feature_selector = SelectKBest(chi2, k="all")  # type: ignore
-  feature_selector.fit_transform(features, y)
+  feature_selector = SelectKBest(chi2, k="all")
+  feature_selector.fit(features, y)
   print("\n\nK-best scores:")
   print("-" * 80)
   print(feature_selector.scores_)
@@ -66,13 +69,15 @@ def _select_feature_extraction_methods(
 
 
 def _is_currency(token: str) -> bool:
-  return (token[0] in _CURRENCY_SYMBOLS
-          or token[-1] in _CURRENCY_SYMBOLS)
+  if len(token) == 1 and token in _CURRENCY_SYMBOLS:
+    return True
+  return (token[1:].isnumeric() if token[0] in _CURRENCY_SYMBOLS
+          else token[:-1].isnumeric() if token[-1] in _CURRENCY_SYMBOLS
+          else False)
 
 
 def _is_number(token: str) -> bool:
-  return (token.isnumeric()
-          and len(token) >= _MIN_DIGITS_IN_NUMBER)
+  return token.isnumeric() and len(token) >= _MIN_DIGITS_IN_NUMBER
 
 
 def _is_currency_or_number(token: str) -> bool:
@@ -128,7 +133,7 @@ class Context:
   ):
     if all_names is None or all_stopwords is None or stemmer is None:
       raise ValueError(
-        f"'all_names', 'all_stopwords' or 'stemmer' is not set in Context."
+        f"'all_names', 'all_stopwords' or 'stemmer' is not set in context."
       )
 
     self.all_names = all_names
@@ -159,7 +164,7 @@ class TextClassifierBuilder:
     self._normalized_data = normalized_data
     self._balanced_weights = balanced_weights
     self._context = context
-    self._study = None
+    self._study: (optuna.study.Study | None) = None
 
   def build(
     self,
@@ -227,11 +232,11 @@ class TextClassifierBuilder:
         return model
 
     if X is None or y is None:
-      raise ValueError("X and/or y is None.")
-    X, y = check_X_y(X, y, dtype=None, ensure_2d=False)  # type: ignore
+      raise ValueError("X and/or y is not set.")
+    X, y = check_X_y(X, y, dtype=None, ensure_2d=False)
 
     if model is not None:
-      self._fit(model, X, y,  # type: ignore
+      self._fit(model, X, y,
                 balanced_weights=self._balanced_weights,
                 incremental=True, verbose=True,
                 params=params)
@@ -243,13 +248,15 @@ class TextClassifierBuilder:
       return model
 
     sampler = optuna.samplers.TPESampler(
-      seed=misc().random_seed  # type: ignore
+      seed=_RANDOM_SEED
     )
     self._study = optuna.create_study(
       direction="maximize", sampler=sampler
     )
+    if self._study is None:
+      raise ValueError("Study is not set.")
     feature_extraction_methods = _select_feature_extraction_methods(
-      X, y  # type: ignore
+      X, y
     )
 
     tried_models = {}
@@ -260,12 +267,12 @@ class TextClassifierBuilder:
         "Features",
         FeatureUnion([
           ("TF-IDF",
-           self._create_feature_extractor(trial=trial)),  # type: ignore
+           self._create_feature_extractor(trial=trial)),
           (
             "Custom TF-IDF",
             make_pipeline(
               CustomFeatureExtractor(feature_extraction_methods),
-              TfidfTransformer(norm=None),  # type: ignore
+              TfidfTransformer(norm=None),
             )
           )
         ])
@@ -277,6 +284,7 @@ class TextClassifierBuilder:
         estimators += [("Feature Selector",
                         self._create_feature_selector(trial=trial))]
       estimators += [self._create_predictor_data(trial=trial)]
+
       classifier = Pipeline(estimators)
 
       # If no params to optimize - exit without cross-validation.
@@ -288,7 +296,7 @@ class TextClassifierBuilder:
       if self._balanced_weights:
         predictor_name = get_predictor_name(classifier)
         params = {f"{predictor_name}__sample_weight":
-                    get_sample_weights(y)}  # type: ignore
+                    get_sample_weights(y)}
       else:
         params = None
       tried_models[trial.number] = classifier
@@ -296,7 +304,7 @@ class TextClassifierBuilder:
         classifier, X, y,
         scoring=make_scorer(fbeta_score, beta=_CROSS_VAL_FBETA),
         cv=StratifiedKFold(_CROSS_VAL_SPLITS),
-        params=params,  # type: ignore
+        params=params,
         n_jobs=-1, verbose=4,
       )
       return scores.mean()
@@ -304,7 +312,7 @@ class TextClassifierBuilder:
     self._study.optimize(mean_score, n_trials=_OPTUNA_N_TRIALS,
                          n_jobs=1, show_progress_bar=True)
     model = tried_models[self._study.best_trial.number]
-    model = self._fit(model, X, y,  # type: ignore
+    model = self._fit(model, X, y,
                       balanced_weights=self._balanced_weights, verbose=True,
                       params=params)
     try:
@@ -335,49 +343,52 @@ class TextClassifierBuilder:
     predictor.set_params(**params)
 
     sample_weights = get_sample_weights(y) if balanced_weights else None
-    predictor.fit(X_tfidf, y, sample_weight=sample_weights)  # type: ignore
+    predictor.fit(X_tfidf, y, sample_weight=sample_weights)
     if verbose:
-      y_pred = predictor.predict(X_tfidf)  # type: ignore
+      y_pred = predictor.predict(X_tfidf)
       print(f"train_accuracy={accuracy_score(y, y_pred):.3f}")
     return model
 
   def _create_feature_extractor(self, trial: optuna.Trial) -> TfidfVectorizer:
     return TfidfVectorizer(
       lowercase=False, tokenizer=self._tokenize,
-      token_pattern=None, ngram_range=(1, 2),  # type: ignore
-      min_df=1e-3, max_df=0.5,  # type: ignore
-      norm=None,  # type: ignore
+      token_pattern=None, ngram_range=(1, 2),
+      min_df=1e-3, max_df=0.5,
+      norm=None,
     )
 
   def _create_feature_selector(self, trial: optuna.Trial) -> FeatureSelector:
     if self._context is None:
-      raise ValueError(f"Context is None.")
-    feature_selector_type = classification().feature_selector_type
-    if feature_selector_type == "model":
-      return SelectFromModel(self._context.feature_estimator, threshold=1e-5)
-    elif feature_selector_type == "svd":
+      raise ValueError(f"Context is not set.")
+    if self._context.feature_estimator is None:
+      raise ValueError(f"Feature estimator is not set in context.")
+    if _FEATURE_SELECTOR_TYPE == "model":
+      return SelectFromModel(self._context.feature_estimator)
+    elif _FEATURE_SELECTOR_TYPE == "svd":
+      if not hasattr(self._context.feature_estimator, "n_features_in_"):
+        raise ValueError(f"Number of features is not available in context.")
       n_features = min(self._context.feature_estimator.n_features_in_, 1000)
       n_components = trial.suggest_int(
-        "n_components", 1, n_features  # type: ignore
+        "n_components", 1, n_features
       )
       return make_pipeline(
         TruncatedSVD(n_components=n_components,
-                     random_state=misc().random_seed),  # type: ignore
+                     random_state=_RANDOM_SEED),
         Normalizer(copy=False),
       )
     else:
       raise ValueError(
-        f"Invalid feature selector type '{feature_selector_type}'."
+        f"Invalid feature selector type '{_FEATURE_SELECTOR_TYPE}'."
       )
 
   def _create_predictor_data(self, trial: optuna.Trial) -> PipelineStep:
-    return PipelineStep()
+    raise NotImplementedError("No context for predictor data creation.")
 
   def _tokenize(self, message: str) -> list[str]:
     if self._context is None:
-      raise ValueError(f"Context is None.")
+      raise ValueError(f"Context is not set.")
     tokens = [token
-              for token in re.split(tokenization().regex_separators,
+              for token in re.split(_REGEX_SEPARATORS,
                                     message.lower())
               if token]
     return [
