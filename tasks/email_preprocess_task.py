@@ -1,6 +1,7 @@
 """Preprocessing of retrieved email spam data."""
 
 from email import message_from_binary_file
+from email.charset import Charset
 from email.message import EmailMessage
 from email.policy import default
 from pathlib import Path
@@ -38,29 +39,54 @@ def _parse_dataset_from_tarfile(
       file = tar.extractfile(tarobj)
       if file is not None:
         email_message = message_from_binary_file(file, policy=default)
-        message = _parse_data(email_message)
-        if message:
+        message = None
+        try:
+          message = _parse_data(email_message)
+        except (LookupError, UnicodeDecodeError) as e:
+          print(e)
+        if message is not None:
           spam_data["message"] += [message]
           spam_data["type"] += ["email"]
           spam_data["is_spam"] += [int(is_spam)]
         file.close()
 
 
-def _parse_data(message: EmailMessage) -> str:
+def _parse_data(message: EmailMessage) -> str | None:
   content = []
+  has_alternative_parts = False
+  part: EmailMessage
   for part in message.walk():
-    if part.get_content_maintype() == "multipart":
-        continue
     content_type = part.get_content_type()
-    if content_type == "text/plain":
-      payload = str(part.get_payload())
+    if content_type == "multipart/alternative":
+      has_alternative_parts = True
+      continue
+    elif part.get_content_maintype() == "multipart":
+      continue
+    elif content_type == "text/plain":
+      payload = _parse_payload(part)
       content += [payload]
     elif content_type == "text/html":
-      payload = str(part.get_payload())
+      payload = _parse_payload(part)
       content += [bs4.BeautifulSoup(payload, "html.parser").get_text()]
     else:
       pass
-  return "".join(content)
+    if has_alternative_parts:
+      break
+  return "".join(content) if content else None
+
+
+def _parse_payload(message: EmailMessage) -> str:
+  payload = None
+  charset_str = message.get_content_charset()
+  if charset_str is not None:
+    charset = Charset(charset_str)
+    if charset.input_codec is not None:
+      payload = str(
+        message.get_payload(decode=True).decode(charset.input_codec)  # type: ignore
+      )
+  if payload is None:
+    payload = str(message.get_payload(decode=False))
+  return payload
 
 
 class EmailPreprocessTask(luigi.Task):
