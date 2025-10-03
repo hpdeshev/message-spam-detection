@@ -76,17 +76,16 @@ def _parse_data(message: EmailMessage) -> str | None:
 
 
 def _parse_payload(message: EmailMessage) -> str:
-  payload = None
   charset_str = message.get_content_charset()
   if charset_str is not None:
     charset = Charset(charset_str)
     if charset.input_codec is not None:
-      payload = str(
+      return str(
         message.get_payload(decode=True).decode(charset.input_codec)  # type: ignore
       )
-  if payload is None:
-    payload = str(message.get_payload(decode=False))
-  return payload
+  return str(
+    message.get_payload(decode=True).decode("ascii", errors="replace")  # type: ignore
+  )
 
 
 class EmailPreprocessTask(luigi.Task):

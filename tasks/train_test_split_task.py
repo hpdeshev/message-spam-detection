@@ -60,7 +60,7 @@ class TrainTestSplitTask(luigi.Task):
         sms_spam_df = sms_spam_df.drop_duplicates()
       datasets += [sms_spam_df]
     spam_df = pd.concat(datasets)
-    if not self.duplicates:
+    if not self.duplicates and self.email and self.sms:
       spam_df = spam_df.drop_duplicates()
 
     (X_train, X_test,
