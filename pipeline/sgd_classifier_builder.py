@@ -1,13 +1,13 @@
 """Trains bag-of-words (BoW) models via stochastic gradient descent (SGD)."""
 
 import copy
+from typing import override
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, hinge_loss, log_loss
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from typing_extensions import override
 
 from common.config import misc
 from pipeline.text_classifier_builder import TextClassifierBuilder

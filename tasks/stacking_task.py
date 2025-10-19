@@ -3,13 +3,13 @@
 from collections.abc import Sequence
 import itertools
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.ensemble import StackingClassifier
 from sklearn.model_selection import StratifiedKFold
-from typing_extensions import override
 
 from common.types import PipelineStep, PipelineSteps
 from tasks.extra_trees_task import \

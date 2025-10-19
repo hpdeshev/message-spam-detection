@@ -2,11 +2,11 @@
 
 from pathlib import Path
 import re
+from typing import override
 from zipfile import ZipFile
 
 import luigi
 import pandas as pd
-from typing_extensions import override
 
 from common.types import SpamDict
 from tasks.message_retrieval_task import MessageRetrievalTask

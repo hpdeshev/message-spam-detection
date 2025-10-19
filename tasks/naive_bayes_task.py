@@ -1,12 +1,12 @@
 """Implementation of naive Bayes text classifier."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.naive_bayes import MultinomialNB
-from typing_extensions import override
 
 from common.types import PipelineStep
 from pipeline.text_classifier_builder import Context, TextClassifierBuilder

@@ -1,12 +1,12 @@
 """Implementation of decision tree text classifier."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
-from typing_extensions import override
 
 from common.config import misc
 from common.types import  PipelineStep

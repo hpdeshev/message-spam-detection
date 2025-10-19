@@ -1,11 +1,11 @@
 """Message dataset formation and splitting into training and test subsets."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from typing_extensions import override
 
 from common.config import misc
 from tasks.email_preprocess_task import EmailPreprocessTask

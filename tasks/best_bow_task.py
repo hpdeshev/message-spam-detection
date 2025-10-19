@@ -2,13 +2,13 @@
 
 import os
 from pathlib import Path
+from typing import override
 
 import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report, euclidean_distances
-from typing_extensions import override
 
 from common.types import ClassificationReport
 from pipeline.text_classifier_builder import TextClassifierBuilder

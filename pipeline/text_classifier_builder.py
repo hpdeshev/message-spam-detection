@@ -6,7 +6,6 @@ import pickle
 import re
 
 import nltk
-import numpy as np
 import optuna
 import pandas as pd
 from sklearn.base import BaseEstimator
@@ -43,29 +42,30 @@ _RANDOM_SEED = int(misc().random_seed)  # type: ignore
 _REGEX_SEPARATORS = str(tokenization().regex_separators)
 
 
-def _select_feature_extraction_methods(
+def _select_custom_tfidf_extractors(
   X: pd.Series,
   y: pd.Series,
 ) -> FeatureExtractorMethodData:
-  """Selects a custom `TF-IDF` feature using `_FEATURE_EXTRACTION_METHODS`.
+  """Selects a custom `TF-IDF` feature using `_CUSTOM_TFIDF_EXTRACTORS`.
   
   The custom `TF-IDF` feature is selected based on highest `chi-squared test`
   score with the target label.
   """
   pipe = make_pipeline(
-    CustomFeatureExtractor(_FEATURE_EXTRACTION_METHODS),  # type: ignore
+    CustomFeatureExtractor(_CUSTOM_TFIDF_EXTRACTORS),  # type: ignore
     TfidfTransformer(norm=None),
   )
   features = pipe.fit_transform(X, y)
-  feature_selector = SelectKBest(chi2, k="all")
-  feature_selector.fit(features, y)
-  print("\n\nK-best scores:")
-  print("-" * 80)
-  print(feature_selector.scores_)
+  features_df = pd.DataFrame(features.toarray(),
+                             columns=list(_CUSTOM_TFIDF_EXTRACTORS))
+  feature_selector = SelectKBest(chi2, k=1)
+  feature_selector.fit(features_df, y)
 
-  return [
-    _FEATURE_EXTRACTION_METHODS[np.argmax(feature_selector.scores_)]
-  ]
+  best_features = feature_selector.get_feature_names_out()
+  return {
+    feature: _CUSTOM_TFIDF_EXTRACTORS[feature]
+    for feature in best_features
+  }
 
 
 def _is_currency(token: str) -> bool:
@@ -96,17 +96,10 @@ def _get_currency_numbers_count(tokens: Tokens) -> int:
   return _get_currency_count(tokens) + _get_numbers_count(tokens)
 
 
-_FEATURE_EXTRACTION_METHODS = [
-  ("[CURRENCY]", _get_currency_count),
-  ("[NUMBER]", _get_numbers_count),
-  ("[CURRENCY_OR_NUMBER]", _get_currency_numbers_count),
-]
-
-
-FEATURE_DISCOVERY_METHODS = {
-  "[CURRENCY]": _is_currency,
-  "[NUMBER]": _is_number,
-  "[CURRENCY_OR_NUMBER]": _is_currency_or_number,
+_CUSTOM_TFIDF_EXTRACTORS = {
+  "[CURRENCY]": _get_currency_count,
+  "[NUMBER]": _get_numbers_count,
+  "[CURRENCY_OR_NUMBER]": _get_currency_numbers_count,
 }
 
 
@@ -182,7 +175,7 @@ class TextClassifierBuilder:
     In order for the `BoW` approach to be applicable, the message spam data
     is tokenized via the `_tokenize` method. Then, `TF-IDF` vectorization is
     performed, including a custom `TF-IDF` feature that is selected based on
-    `_FEATURE_EXTRACTION_METHODS`. `TF-IDF` normalization is not done
+    `_CUSTOM_TFIDF_EXTRACTORS`. `TF-IDF` normalization is not done
     in order to allow for a final normalization after the combination of
     regular and custom `TF-IDF` features.
 
@@ -255,7 +248,7 @@ class TextClassifierBuilder:
     )
     if self._study is None:
       raise ValueError("Study is not set.")
-    feature_extraction_methods = _select_feature_extraction_methods(
+    custom_tfidf_extractors = _select_custom_tfidf_extractors(
       X, y
     )
 
@@ -271,7 +264,7 @@ class TextClassifierBuilder:
           (
             "Custom TF-IDF",
             make_pipeline(
-              CustomFeatureExtractor(feature_extraction_methods),
+              CustomFeatureExtractor(custom_tfidf_extractors),
               TfidfTransformer(norm=None),
             )
           )

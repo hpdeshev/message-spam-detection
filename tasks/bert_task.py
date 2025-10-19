@@ -3,6 +3,7 @@
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 import re
+from typing import Any, override
 
 import datasets
 import evaluate
@@ -23,12 +24,9 @@ from transformers.models.bert import (
   BertForSequenceClassification, BertTokenizer
 )
 from transformers.trainer_utils import EvalPrediction
-from typing_extensions import Any, override
 
 from common.config import classification, misc, tokenization
-from pipeline.text_classifier_builder import (
-  FEATURE_DISCOVERY_METHODS, TextClassifierBuilder
-)
+from pipeline.text_classifier_builder import TextClassifierBuilder
 from pipeline.utils import get_transformers
 from tasks.best_bow_task import BestBowTask
 from tasks.train_test_split_task import TrainTestSplitTask
@@ -55,11 +53,10 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
                    for name in (get_transformers(bow_classifier)
                                 .get_feature_names_out())
                    if name.startswith("TF-IDF__")]
-  custom_feature_names = [
-    method[0] for method in (bow_classifier
-                             .named_steps["Features"]["Custom TF-IDF"]
-                             .named_steps["customfeatureextractor"].methods)
-  ]
+  custom_feature_names = list(
+    bow_classifier.named_steps["Features"]["Custom TF-IDF"]
+                  .named_steps["customfeatureextractor"].method_data
+  )
   feature_names += custom_feature_names
   for name in feature_names:
     ngrams = name.split()
@@ -94,12 +91,10 @@ def get_bow_dataset(
   dataset: dict[str, list[str | int]] = {
     "message": [], "is_spam": []
   }
-  feature_discovery_methods = [
-    method
-    for method in (bow_classifier
-                   .named_steps["Features"]["Custom TF-IDF"]
-                   .named_steps["customfeatureextractor"].methods)
-  ]
+  feature_discovery_methods = (
+    bow_classifier.named_steps["Features"]["Custom TF-IDF"]
+                  .named_steps["customfeatureextractor"].method_data.items()
+  )
   for message, is_spam in zip(X, y):
     tokens = []
     for token in re.split(_REGEX_SEPARATORS,

@@ -3,11 +3,11 @@
 import io
 import os
 from pathlib import Path
+from typing import override
 
 import luigi
 import luigi.format
 import requests
-from typing_extensions import override
 
 
 class MessageRetrievalTask(luigi.Task):
