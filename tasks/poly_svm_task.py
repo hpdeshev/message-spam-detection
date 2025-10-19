@@ -1,12 +1,12 @@
 """A polynomial support vector machine (SVM) text classifier builder."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.svm import SVC
-from typing_extensions import override
 
 from common.config import misc
 from common.types import PipelineStep

@@ -1,7 +1,8 @@
 """Implementation of tasks which depend on all other Luigi tasks."""
 
+from typing import override
+
 import luigi
-from typing_extensions import override
 
 from tasks.ada_boost_task import AdaBoostTask
 from tasks.bert_task import BertTask

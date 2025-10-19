@@ -6,11 +6,11 @@ from email.message import EmailMessage
 from email.policy import default
 from pathlib import Path
 from tarfile import open as tar_open, TarFile
+from typing import override
 
 import bs4
 import luigi
 import pandas as pd
-from typing_extensions import override
 
 from common.types import SpamDict
 from tasks.message_retrieval_task import MessageRetrievalTask

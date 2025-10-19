@@ -5,11 +5,11 @@ Corpora are downloaded for names, stopwords and words.
 
 import os
 from pathlib import Path
+from typing import override
 
 import luigi
 import nltk
 import nltk.corpus
-from typing_extensions import override
 
 
 class NltkTask(luigi.Task):

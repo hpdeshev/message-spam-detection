@@ -1,10 +1,10 @@
 """General types."""
 
 from collections.abc import Callable, Sequence
+from typing import TypeAlias
 
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
-from typing_extensions import TypeAlias
 
 
 ClassificationReport: TypeAlias = dict[str, dict[str, float] | float]
@@ -13,7 +13,7 @@ Tokens: TypeAlias = list[str]
 FeatureExtractor: TypeAlias = BaseEstimator
 FeatureExtractorMethod: TypeAlias = Callable[[Tokens], int]
 FeatureExtractorMethodData: TypeAlias = (
-  list[tuple[str, FeatureExtractorMethod]]  
+  dict[str, FeatureExtractorMethod]
 )
 FeatureImportances: TypeAlias = list[tuple[str, float]]
 FeatureSelector: TypeAlias = (

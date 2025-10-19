@@ -1,12 +1,12 @@
 """Implementation of extra trees text classifier."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.ensemble import ExtraTreesClassifier
-from typing_extensions import override
 
 from common.config import misc
 from common.types import PipelineStep

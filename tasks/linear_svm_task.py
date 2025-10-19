@@ -1,12 +1,12 @@
 """Implementation of linear support vector machine (SVM) text classifier."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.linear_model import SGDClassifier
-from typing_extensions import override
 
 from common.config import classification, misc
 from common.types import PipelineStep

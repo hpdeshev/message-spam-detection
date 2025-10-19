@@ -1,12 +1,12 @@
 """Implementation of gradient boosting text classifier."""
 
 from pathlib import Path
+from typing import override
 
 import luigi
 import optuna
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
-from typing_extensions import override
 
 from common.config import classification, misc
 from common.types import PipelineStep
