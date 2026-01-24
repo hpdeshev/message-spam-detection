@@ -8,26 +8,28 @@ from zipfile import ZipFile
 import luigi
 import pandas as pd
 
-from common.types import SpamDict
+from common.types import SpamData
 from tasks.message_retrieval_task import MessageRetrievalTask
 
 
 _FILES = ["sms+spam+collection.zip"]
 _URL = "https://archive.ics.uci.edu/static/public/228/"
+_DATA_PATH = Path("data")
+_OUTPUT_PATH = _DATA_PATH / "sms_spam_data.csv"
 
 
 def _parse_dataset_from_zipfile(
   zfile: ZipFile,
-  spam_data: SpamDict,
+  spam_data: SpamData,
 ) -> None:
   for zipobj in zfile.infolist():
     if not zipobj.filename.endswith("readme"):
       with zfile.open(zipobj.filename, mode="r") as file:
         for line in file:
           message, is_spam = _parse_data(line)
-          spam_data["message"] += [message]
-          spam_data["type"] += ["sms"]
-          spam_data["is_spam"] += [is_spam]
+          spam_data["message"].append(message)
+          spam_data["kind"].append("sms")
+          spam_data["is_spam"].append(is_spam)
 
 
 def _parse_data(payload: bytes) -> tuple[str, int]:
@@ -52,17 +54,13 @@ class SmsPreprocessTask(luigi.Task):
 
   @override
   def run(self):
-    spam_data: dict[str, list[str | int]] = {
-      "message": [], "type": [], "is_spam": []
-    }
+    spam_data = SpamData(message=[], kind=[], is_spam=[])
     for file in _FILES:
-      with ZipFile(Path() / "data" / file) as zfile:
+      with ZipFile(_DATA_PATH / file) as zfile:
         _parse_dataset_from_zipfile(zfile, spam_data)
     spam_df = pd.DataFrame(spam_data)
-    spam_df.to_csv(self.output().path, index=False)
+    spam_df.to_csv(_OUTPUT_PATH, index=False)
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "data" / "sms_spam_data.csv"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

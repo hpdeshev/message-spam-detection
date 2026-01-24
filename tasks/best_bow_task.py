@@ -1,8 +1,7 @@
 """Selection of the best bag-of-words (BoW) classifier for spam data."""
 
-import os
 from pathlib import Path
-from typing import override
+from typing import override, TypedDict
 
 import luigi
 import matplotlib.pyplot as plt
@@ -10,7 +9,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report, euclidean_distances
 
-from common.types import ClassificationReport
 from pipeline.text_classifier_builder import TextClassifierBuilder
 from tasks.ada_boost_task import AdaBoostTask
 from tasks.decision_tree_task import DecisionTreeTask
@@ -26,9 +24,20 @@ from tasks.voting_task import VotingTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_SCORES_PATH = Path("figures") / "bow_classifier_scores.png"
+_OUTPUT_MODEL_PATH = Path("models") / "best_bow_classifier.pkl"
+
+
+class _ClassifierScores(TypedDict):
+  classifier_name: list[str]
+  spam_precision: list[float]
+  spam_f1: list[float]
+  accuracy: list[float]
+
+
 class BestBowTask(luigi.Task):
   """Outputs the best `BoW` spam classifier.
-  
+
   Selection method:
   1. The following metrics are collected for all `BoW` classifiers,
      listed by order of priority:
@@ -66,39 +75,28 @@ class BestBowTask(luigi.Task):
     test_df = pd.read_csv(
       self.input()["train_test_split"]["test"].path
     )
-
-    classifier_scores: dict[str, ClassificationReport] = {}
-    for name, _ in list(self.requires().items())[1:]:
-      classifier_scores[name] = self._get_scores(
-        name, test_df.message, test_df.is_spam
-      )
-
-    classifier_scores_df = pd.DataFrame({
-      "classifier_name": classifier_scores.keys(),
-      "spam_precision":
-        [score["Spam"]["precision"] for score in classifier_scores.values()],
-      "spam_f1":
-        [score["Spam"]["f1-score"] for score in classifier_scores.values()],
-      "accuracy":
-        [score["accuracy"] for score in classifier_scores.values()],
-    })
-
+    classifier_scores = _ClassifierScores(
+      classifier_name=[], spam_precision=[], spam_f1=[], accuracy=[]
+    )
+    for task_name in self.requires():
+      if task_name != "train_test_split":
+        self._update_classifier_scores(
+          task_name,
+          test_df.message, test_df.is_spam,
+          classifier_scores,
+        )
+    classifier_scores_df = pd.DataFrame(classifier_scores)
     max_scores_2d = np.array([[
       classifier_scores_df.spam_precision.max(),
       classifier_scores_df.spam_f1.max(),
-      classifier_scores_df.accuracy.max()
+      classifier_scores_df.accuracy.max(),
     ]])
-    euclidean_dist_ds = classifier_scores_df.apply(
-      lambda row: euclidean_distances(
-        X=np.array([[row.spam_precision, row.spam_f1, row.accuracy]]),
-        Y=max_scores_2d, squared=True,
-      )[0, 0],
-      axis=1,
-    )
-    euclidean_dist_ds.name = "euclidean_dist_max"
-
-    final_classifier_scores_df = pd.concat(
-      [classifier_scores_df, euclidean_dist_ds], axis=1
+    final_classifier_scores_df = classifier_scores_df.assign(
+      euclidean_dist_max=lambda df: euclidean_distances(
+        X=df[["spam_precision", "spam_f1", "accuracy"]],
+        Y=max_scores_2d,
+        squared=True,
+      )
     )
     final_classifier_scores_df = final_classifier_scores_df.sort_values(
       by="euclidean_dist_max", ascending=True
@@ -108,47 +106,47 @@ class BestBowTask(luigi.Task):
       by=["spam_precision", "spam_f1", "accuracy"], ascending=False
     )
 
-    _save_classifier_scores(
-      classifier_scores_df,
-      self.output()["bow_classifier_scores"].path,
-    )
+    _save_classifier_scores(classifier_scores_df, _OUTPUT_SCORES_PATH)
     best_bow_classifier_name = (final_classifier_scores_df.head(1)
                                 .classifier_name.values[0])
-    os.symlink(
-      os.path.abspath(self.input()[best_bow_classifier_name].path),
-      self.output()["best_bow_classifier"].path,
-    )
+    best_bow_classifier_path = self.input()[best_bow_classifier_name].path
+    _OUTPUT_MODEL_PATH.symlink_to(Path(best_bow_classifier_path).absolute())
 
   @override
   def output(self):
     return {
       "bow_classifier_scores":
-        luigi.LocalTarget(Path() / "figures" / "bow_classifier_scores.png"),
+        luigi.LocalTarget(_OUTPUT_SCORES_PATH),
       "best_bow_classifier":
-        luigi.LocalTarget(Path() / "models" / "best_bow_classifier.pkl"),
+        luigi.LocalTarget(_OUTPUT_MODEL_PATH),
     }
 
-  def _get_scores(
+  def _update_classifier_scores(
     self,
-    input_name: str,
+    task_name: str,
     X: pd.Series,
     y: pd.Series,
-  ) -> ClassificationReport:
+    scores: _ClassifierScores,
+  ) -> None:
     classifier = TextClassifierBuilder().build(
-      self.input()[input_name].path
+      self.input()[task_name].path
     )
-    return classification_report(
+    report = classification_report(
       y, classifier.predict(X),
       labels=[0, 1],
       target_names=["Ham", "Spam"],
       digits=3, output_dict=True,
       zero_division=np.nan,
     )
+    scores["classifier_name"].append(task_name)
+    scores["spam_precision"].append(report["Spam"]["precision"])
+    scores["spam_f1"].append(report["Spam"]["f1-score"])
+    scores["accuracy"].append(report["accuracy"])
 
 
 def _save_classifier_scores(
   classifier_scores_df: pd.DataFrame,
-  filename: str,
+  filename: Path,
 ) -> None:
   score_names = ["spam precision", "spam F1-score", "accuracy"]
   scores = [classifier_scores_df.spam_precision,

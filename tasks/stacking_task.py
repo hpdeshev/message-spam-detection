@@ -31,6 +31,9 @@ from tasks.nltk_task import NltkTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_PATH = Path("models") / "stacking_classifier.pkl"
+
+
 class StackingClassifierBuilder(TextClassifierBuilder):
   """Builds a pipeline with a `stacking` text classifier."""
 
@@ -123,11 +126,9 @@ class StackingTask(luigi.Task):
       )
     )
     builder.build(
-      self.output().path, train_df.message, train_df.is_spam
+      _OUTPUT_PATH, train_df.message, train_df.is_spam
     )
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "stacking_classifier.pkl"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

@@ -11,7 +11,7 @@ from common.types import ClassWeights
 
 def get_class_weights(y: ArrayLike) -> ClassWeights:
   """Returns class weights inversely proportional to class frequencies.
-  
+
   Args:
     y: Spam data labels.
 
@@ -25,7 +25,7 @@ def get_class_weights(y: ArrayLike) -> ClassWeights:
 
 def get_sample_weights(y: ArrayLike) -> np.ndarray:
   """Returns sample weights inversely proportional to class frequencies.
-  
+
   Args:
     y: Spam data labels.
 

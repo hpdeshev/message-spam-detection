@@ -16,15 +16,18 @@ from tasks.nltk_task import NltkTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_PATH = Path("models") / "logistic_regression_classifier.pkl"
+
+
 class LogisticRegressionClassifierBuilder(SgdClassifierBuilder):
   """Builds a pipeline with a `logistic regression` text classifier.
-  
+
   This classifier is a support vector machine (`SVM`) linear model,
   trained with `log loss`.
 
   The classifier is used by other models for feature selection,
   based on learned weights or dimensionality reduction.
-  
+
   The classifier can be used for determining ham/spam feature importances.
   """
 
@@ -75,11 +78,9 @@ class LogisticRegressionTask(luigi.Task):
       )
     )
     builder.build(
-      self.output().path, train_df.message, train_df.is_spam
+      _OUTPUT_PATH, train_df.message, train_df.is_spam
     )
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "logistic_regression_classifier.pkl"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

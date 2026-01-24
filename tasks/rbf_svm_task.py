@@ -18,6 +18,9 @@ from tasks.nltk_task import NltkTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_PATH = Path("models") / "rbf_svm_classifier.pkl"
+
+
 class RbfSvmClassifierBuilder(TextClassifierBuilder):
   """Builds a pipeline with an `RBF SVM` text classifier."""
 
@@ -62,11 +65,9 @@ class RbfSvmTask(luigi.Task):
       )
     )
     builder.build(
-      self.output().path, train_df.message, train_df.is_spam
+      _OUTPUT_PATH, train_df.message, train_df.is_spam
     )
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "rbf_svm_classifier.pkl"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

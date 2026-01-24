@@ -12,9 +12,14 @@ from tasks.email_preprocess_task import EmailPreprocessTask
 from tasks.sms_preprocess_task import SmsPreprocessTask
 
 
+_DATA_PATH = Path("data")
+_OUTPUT_TRAIN_PATH = _DATA_PATH / "train_messages.csv"
+_OUTPUT_TEST_PATH = _DATA_PATH / "test_messages.csv"
+
+
 class TrainTestSplitTask(luigi.Task):
   """Outputs a training set and a test set out of a message dataset.
-  
+
   Depending on email and SMS enablement settings in `luigi.cfg`,
   a message dataset is formed from email and/or SMS spam data.
 
@@ -28,10 +33,10 @@ class TrainTestSplitTask(luigi.Task):
   message distribution.
   """
 
-  duplicates = luigi.BoolParameter(False)
-  email = luigi.BoolParameter(True)
-  sms = luigi.BoolParameter(False)
-  test_split = luigi.FloatParameter(0.2)
+  duplicates = luigi.BoolParameter(default=False)
+  email = luigi.BoolParameter(default=True)
+  sms = luigi.BoolParameter(default=False)
+  test_split = luigi.FloatParameter(default=0.2)
 
   @override
   def requires(self):
@@ -51,39 +56,34 @@ class TrainTestSplitTask(luigi.Task):
       )
       if not self.duplicates:
         email_spam_df = email_spam_df.drop_duplicates()
-      datasets += [email_spam_df]
+      datasets.append(email_spam_df)
     if self.sms:
       sms_spam_df = pd.read_csv(
         self.input()["sms"].path
       )
       if not self.duplicates:
         sms_spam_df = sms_spam_df.drop_duplicates()
-      datasets += [sms_spam_df]
+      datasets.append(sms_spam_df)
     spam_df = pd.concat(datasets)
     if not self.duplicates and self.email and self.sms:
       spam_df = spam_df.drop_duplicates()
 
     (X_train, X_test,
      y_train, y_test) = train_test_split(
-      spam_df[["message", "type"]], spam_df.is_spam,
+      spam_df[["message", "kind"]], spam_df.is_spam,
       test_size=self.test_split,
       random_state=misc().random_seed, shuffle=True,
       stratify=spam_df.is_spam,
     )
 
-    output = self.output()
     train_df = pd.concat([X_train, y_train], axis=1)
-    train_df.to_csv(output["train"].path, index=False)
+    train_df.to_csv(_OUTPUT_TRAIN_PATH, index=False)
     test_df = pd.concat([X_test, y_test], axis=1)
-    test_df.to_csv(output["test"].path, index=False)
+    test_df.to_csv(_OUTPUT_TEST_PATH, index=False)
 
   @override
   def output(self):
     return {
-      "train": luigi.LocalTarget(
-        Path() / "data" / "train_messages.csv"
-      ),
-      "test": luigi.LocalTarget(
-        Path() / "data" / "test_messages.csv"
-      ),
+      "train": luigi.LocalTarget(_OUTPUT_TRAIN_PATH),
+      "test": luigi.LocalTarget(_OUTPUT_TEST_PATH),
     }

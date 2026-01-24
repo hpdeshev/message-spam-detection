@@ -1,16 +1,17 @@
 """Custom feature extraction as part of a Scikit-learn pipeline."""
 
-from collections.abc import Collection
+from collections.abc import Iterable
 import re
 
 import numpy as np
+from numpy.typing import ArrayLike
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from common.config import tokenization
 from common.types import FeatureExtractorMethod, FeatureExtractorMethodData
 
 
-_REGEX_SEPARATORS = str(tokenization().regex_separators)
+_REGEX_SEPARATORS = tokenization().regex_separators
 
 
 class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
@@ -25,12 +26,12 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
 
   def fit(
     self,
-    X: Collection[str],
-    y: Collection[int] | None = None,
+    X: ArrayLike,
+    y: ArrayLike | None = None,
   ) -> "CustomFeatureExtractor":
     return self
 
-  def transform(self, X: Collection[str]) -> np.ndarray:
+  def transform(self, X: Iterable[str]) -> np.ndarray:
     return np.array([
       self._extract_features(X, method)
       for method in self.method_data.values()
@@ -38,19 +39,19 @@ class CustomFeatureExtractor(BaseEstimator, TransformerMixin):
 
   def get_feature_names_out(
     self,
-    input_features: Collection[str] | None = None,
+    input_features: ArrayLike | None = None,
   ) -> np.ndarray:
     return np.array(list(self.method_data))
 
   def _extract_features(
     self,
-    messages: Collection[str],
+    messages: Iterable[str],
     method: FeatureExtractorMethod,
   ) -> list[int]:
     return [
-      method([token
-              for token in re.split(_REGEX_SEPARATORS, message)
-              if token])
+      method(token
+             for token in re.split(_REGEX_SEPARATORS, message)
+             if token)
       for message in messages
     ]
 

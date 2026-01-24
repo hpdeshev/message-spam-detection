@@ -12,7 +12,7 @@ import bs4
 import luigi
 import pandas as pd
 
-from common.types import SpamDict
+from common.types import SpamData
 from tasks.message_retrieval_task import MessageRetrievalTask
 
 
@@ -27,12 +27,14 @@ _SPAM_FILES = [
 ]
 _ALL_FILES = _HAM_FILES + _SPAM_FILES
 _URL = "https://spamassassin.apache.org/old/publiccorpus/"
+_DATA_PATH = Path("data")
+_OUTPUT_PATH = _DATA_PATH / "email_spam_data.csv"
 
 
 def _parse_dataset_from_tarfile(
   tar: TarFile,
   is_spam: bool,
-  spam_data: SpamDict,
+  spam_data: SpamData,
 ) -> None:
   for tarobj in tar.getmembers()[1:]:
     if not tarobj.name.endswith("cmds"):
@@ -45,9 +47,9 @@ def _parse_dataset_from_tarfile(
         except (LookupError, UnicodeDecodeError) as e:
           print(e)
         if message is not None:
-          spam_data["message"] += [message]
-          spam_data["type"] += ["email"]
-          spam_data["is_spam"] += [int(is_spam)]
+          spam_data["message"].append(message)
+          spam_data["kind"].append("email")
+          spam_data["is_spam"].append(int(is_spam))
         file.close()
 
 
@@ -64,10 +66,11 @@ def _parse_data(message: EmailMessage) -> str | None:
       continue
     elif content_type == "text/plain":
       payload = _parse_payload(part)
-      content += [payload]
+      content.append(payload)
     elif content_type == "text/html":
       payload = _parse_payload(part)
-      content += [bs4.BeautifulSoup(payload, "html.parser").get_text()]
+      payload = bs4.BeautifulSoup(payload, "html.parser").get_text()
+      content.append(payload)
     else:
       pass
     if has_alternative_parts:
@@ -106,20 +109,16 @@ class EmailPreprocessTask(luigi.Task):
 
   @override
   def run(self):
-    spam_data: dict[str, list[str | int]] = {
-      "message": [], "type": [], "is_spam": []
-    }
+    spam_data = SpamData(message=[], kind=[], is_spam=[])
     for file in _ALL_FILES:
       is_spam = file in _SPAM_FILES
-      with tar_open(Path() / "data" / file, mode="r:bz2") as tar:
+      with tar_open(_DATA_PATH / file, mode="r:bz2") as tar:
         _parse_dataset_from_tarfile(
           tar, is_spam, spam_data
         )
     spam_df = pd.DataFrame(spam_data)
-    spam_df.to_csv(self.output().path, index=False)
+    spam_df.to_csv(_OUTPUT_PATH, index=False)
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "data" / "email_spam_data.csv"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)
