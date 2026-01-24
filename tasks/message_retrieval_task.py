@@ -30,10 +30,11 @@ class MessageRetrievalTask(luigi.Task):
 
   @override
   def output(self):
+    message_folder_path = Path(self.message_folder)
     return [
       luigi.LocalTarget(
-        Path() / self.message_folder / file,
+        message_folder_path / file,
         format=luigi.format.Nop,
       )
-      for file in self.message_files  # type: ignore
+      for file in self.message_files
     ]

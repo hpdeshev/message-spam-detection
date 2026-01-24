@@ -14,6 +14,9 @@ from tasks.nltk_task import NltkTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_PATH = Path("models") / "naive_bayes_classifier.pkl"
+
+
 class NaiveBayesClassifierBuilder(TextClassifierBuilder):
   """Builds a pipeline with a `naive Bayes` text classifier.
 
@@ -59,11 +62,9 @@ class NaiveBayesTask(luigi.Task):
       )
     )
     builder.build(
-      self.output().path, train_df.message, train_df.is_spam
+      _OUTPUT_PATH, train_df.message, train_df.is_spam
     )
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "naive_bayes_classifier.pkl"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

@@ -3,7 +3,7 @@
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 import re
-from typing import Any, override
+from typing import Any, cast, override
 
 import datasets
 import evaluate
@@ -32,7 +32,9 @@ from tasks.best_bow_task import BestBowTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
-_REGEX_SEPARATORS = str(tokenization().regex_separators)
+_OUTPUT_MODEL_PATH = Path("models") / "bert_classifier" / "model"
+_OUTPUT_VOCAB_PATH = Path("models") / "bert_classifier" / "vocab.txt"
+_REGEX_SEPARATORS = tokenization().regex_separators
 
 
 def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
@@ -105,18 +107,18 @@ def get_bow_dataset(
                      .tokenizer(token))
         bow_token = bow_token[0] if bow_token else token
         if bow_token in bow_vocabulary:
-          tokens += [bow_token]
+          tokens.append(bow_token)
         for feature, checker in feature_discovery_methods:
           if checker([bow_token]):
-            tokens += [feature]
-    dataset["message"] += [" ".join(tokens)]
-    dataset["is_spam"] += [is_spam]
+            tokens.append(feature)
+    dataset["message"].append(" ".join(tokens))
+    dataset["is_spam"].append(is_spam)
   return pd.DataFrame(dataset)
 
 
 class BertTask(luigi.Task):
   """Outputs a `BERT` classifier.
-  
+
   Implements an end-to-end classification task with the following steps:
 
   1. A `BoW` dataset is obtained via the `get_bow_dataset` function;
@@ -137,8 +139,8 @@ class BertTask(luigi.Task):
     to the original `BERT`.
   """
 
-  max_input_tokens = luigi.IntParameter(128)
-  model_name = luigi.Parameter("google/bert_uncased_L-2_H-128_A-2")
+  max_input_tokens = luigi.IntParameter(default=128)
+  model_name = luigi.Parameter(default="google/bert_uncased_L-2_H-128_A-2")
 
   @override
   def requires(self):
@@ -155,9 +157,9 @@ class BertTask(luigi.Task):
     )
     bow_vocabulary = get_bow_vocabulary(bow_classifier)
 
-    vocab_filepath = Path(self.output()["bert_classifier_vocab"].path)
+    vocab_filepath = _OUTPUT_VOCAB_PATH
     vocab_filepath.parent.mkdir(parents=True, exist_ok=True)
-    vocab_filepath.write_text("\n".join([item for item in bow_vocabulary]))
+    vocab_filepath.write_text("\n".join(bow_vocabulary))
 
     train_df = pd.read_csv(
       self.input()["train_test_split"]["train"].path
@@ -197,7 +199,7 @@ class BertTask(luigi.Task):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     training_args = TrainingArguments(
-      output_dir=self.output()["bert_classifier_model"].path,
+      output_dir=str(_OUTPUT_MODEL_PATH),
       learning_rate=2e-5,
       per_device_train_batch_size=16,
       per_device_eval_batch_size=16,
@@ -227,11 +229,12 @@ class BertTask(luigi.Task):
     class CustomTrainer(Trainer):
       def compute_loss(
         self,
-        model: BertForSequenceClassification,
+        model: nn.Module,
         inputs: dict[str, Any],
         return_outputs: bool = False,
-        num_items_in_batch: int | None = None,
+        num_items_in_batch: torch.Tensor | None = None,
       ) -> tuple[torch.Tensor, SequenceClassifierOutput] | torch.Tensor:
+        model = cast(BertForSequenceClassification, model)
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.get("logits")
@@ -265,7 +268,7 @@ class BertTask(luigi.Task):
   def output(self):
     return {
       "bert_classifier_model":
-        luigi.LocalTarget(Path() / "models" / "bert_classifier" / "model"),
+        luigi.LocalTarget(_OUTPUT_MODEL_PATH),
       "bert_classifier_vocab":
-        luigi.LocalTarget(Path() / "models" / "bert_classifier" / "vocab.txt"),
+        luigi.LocalTarget(_OUTPUT_VOCAB_PATH),
     }

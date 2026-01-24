@@ -12,6 +12,14 @@ import nltk
 import nltk.corpus
 
 
+_CORPORA_PATH = Path(os.environ["HOME"]) / "nltk_data" / "corpora"
+_OUTPUT_PATHS = [
+  _CORPORA_PATH / "names.zip",
+  _CORPORA_PATH / "words.zip",
+  _CORPORA_PATH / "stopwords.zip",
+]
+
+
 class NltkTask(luigi.Task):
   """Downloads NLTK corpora for names, words and stopwords.
 
@@ -34,42 +42,31 @@ class NltkTask(luigi.Task):
 
   @override
   def output(self):
-    env_home = os.environ["HOME"]
-    return [
-      luigi.LocalTarget(
-        Path() / env_home / "nltk_data" / "corpora" / "names.zip"
-      ),
-      luigi.LocalTarget(
-        Path() / env_home / "nltk_data" / "corpora" / "words.zip"
-      ),
-      luigi.LocalTarget(
-        Path() / env_home / "nltk_data" / "corpora" / "stopwords.zip"
-      ),
-    ]
+    return [luigi.LocalTarget(path) for path in _OUTPUT_PATHS]
 
   @property
   def all_names(self) -> set[str]:
     if not hasattr(self, "_all_names"):
-      self._all_names = set([
+      self._all_names = set(
         word.lower() for word in nltk.corpus.names.words()
-      ])
+      )
     return self._all_names
 
   @property
   def all_english_words(self) -> set[str]:
     if not hasattr(self, "_all_english_words"):
-      self._all_english_words = set([
+      self._all_english_words = set(
         word.lower()
         for word in nltk.corpus.words.words(["en", "en-basic"])
-      ])
+      )
     return self._all_english_words
 
   @property
   def all_stopwords(self) -> set[str]:
     if not hasattr(self, "_all_stopwords"):
-      self._all_stopwords = set([
+      self._all_stopwords = set(
         word.lower() for word in nltk.corpus.stopwords.words()
-      ])
+      )
     return self._all_stopwords
 
   @property

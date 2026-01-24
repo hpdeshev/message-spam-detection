@@ -18,6 +18,9 @@ from tasks.nltk_task import NltkTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
+_OUTPUT_PATH = Path("models") / "gradient_boosting_classifier.pkl"
+
+
 class GradientBoostingClassifierBuilder(TextClassifierBuilder):
   """Builds a pipeline with a `gradient boosting` text classifier.
 
@@ -69,11 +72,9 @@ class GradientBoostingTask(luigi.Task):
       )
     )
     builder.build(
-      self.output().path, train_df.message, train_df.is_spam
+      _OUTPUT_PATH, train_df.message, train_df.is_spam
     )
 
   @override
   def output(self):
-    return luigi.LocalTarget(
-      Path() / "models" / "gradient_boosting_classifier.pkl"
-    )
+    return luigi.LocalTarget(_OUTPUT_PATH)

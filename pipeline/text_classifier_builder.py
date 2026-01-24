@@ -1,6 +1,5 @@
 """Basic Scikit-learn pipelines for bag-of-words (BoW) classification."""
 
-import os
 from pathlib import Path
 import pickle
 import re
@@ -32,14 +31,14 @@ from tasks.utils import get_sample_weights
 
 _CROSS_VAL_FBETA = 0.5  # Spam precision favored.
 _CROSS_VAL_SPLITS = 3
-_CURRENCY_SYMBOLS = str(tokenization().currencies)
-_FEATURE_SELECTOR_TYPE = str(classification().feature_selector_type)
+_CURRENCY_SYMBOLS = tokenization().currencies
+_FEATURE_SELECTOR_TYPE = classification().feature_selector_type
 _MIN_DIGITS_IN_NUMBER = 3
 _OPTUNA_N_TRIALS = 30
 _PATTERN_STARTING_DIGIT = r"^[0-9]?[^\W\d_]+$"
 _PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*$"
-_RANDOM_SEED = int(misc().random_seed)  # type: ignore
-_REGEX_SEPARATORS = str(tokenization().regex_separators)
+_RANDOM_SEED = misc().random_seed
+_REGEX_SEPARATORS = tokenization().regex_separators
 
 
 def _select_custom_tfidf_extractors(
@@ -47,7 +46,7 @@ def _select_custom_tfidf_extractors(
   y: pd.Series,
 ) -> FeatureExtractorMethodData:
   """Selects a custom `TF-IDF` feature using `_CUSTOM_TFIDF_EXTRACTORS`.
-  
+
   The custom `TF-IDF` feature is selected based on highest `chi-squared test`
   score with the target label.
   """
@@ -56,12 +55,12 @@ def _select_custom_tfidf_extractors(
     TfidfTransformer(norm=None),
   )
   features = pipe.fit_transform(X, y)
-  features_df = pd.DataFrame(features.toarray(),
-                             columns=list(_CUSTOM_TFIDF_EXTRACTORS))
   feature_selector = SelectKBest(chi2, k=1)
-  feature_selector.fit(features_df, y)
+  feature_selector.fit(features, y)
 
-  best_features = feature_selector.get_feature_names_out()
+  best_features = feature_selector.get_feature_names_out(
+    input_features=list(_CUSTOM_TFIDF_EXTRACTORS)
+  )
   return {
     feature: _CUSTOM_TFIDF_EXTRACTORS[feature]
     for feature in best_features
@@ -80,10 +79,6 @@ def _is_number(token: str) -> bool:
   return token.isnumeric() and len(token) >= _MIN_DIGITS_IN_NUMBER
 
 
-def _is_currency_or_number(token: str) -> bool:
-  return _is_currency(token) or _is_number(token)
-
-
 def _get_currency_count(tokens: Tokens) -> int:
   return sum(1 for token in tokens if _is_currency(token))
 
@@ -93,7 +88,7 @@ def _get_numbers_count(tokens: Tokens) -> int:
 
 
 def _get_currency_numbers_count(tokens: Tokens) -> int:
-  return _get_currency_count(tokens) + _get_numbers_count(tokens)
+  return sum(1 for token in tokens if _is_currency(token) or _is_number(token))
 
 
 _CUSTOM_TFIDF_EXTRACTORS = {
@@ -167,7 +162,7 @@ class TextClassifierBuilder:
     params: dict[str, bool | float | int | str] | None = None,
   ) -> Pipeline:
     """Creates a trained `BoW` classifier pipeline.
-  
+
     In case of passed `X` and `y`, incremental training is performed if
     `saved_model_path` points to a saved model, otherwise is performed
     cross-validated training and hyperparameter tuning with `Optuna`.
@@ -219,13 +214,19 @@ class TextClassifierBuilder:
       passed as *None*.
     """
     model = None
-    if Path.exists(Path(saved_model_path)):
+    if isinstance(saved_model_path, Path):
+      saved_model_exists = saved_model_path.exists()
+    else:
+      saved_model_exists = Path(saved_model_path).exists()
+    if saved_model_exists:
       model = pickle.load(open(saved_model_path, "rb"))
-      if X is None or y is None:
-        return model
 
     if X is None or y is None:
-      raise ValueError("X and/or y is not set.")
+      if model is None:
+        raise ValueError("X and/or y is not set.")
+      else:
+        return model
+
     X, y = check_X_y(X, y, dtype=None, ensure_2d=False)
 
     if model is not None:
@@ -237,8 +238,10 @@ class TextClassifierBuilder:
         pickle.dump(model, open(saved_model_path, "wb"))
       except Exception as e:
         print("pickle.dump:", e, sep="\n")
-        os.remove(saved_model_path)
       return model
+
+    if self._context is None:
+      raise ValueError(f"Context is None.")
 
     sampler = optuna.samplers.TPESampler(
       seed=_RANDOM_SEED
@@ -248,35 +251,28 @@ class TextClassifierBuilder:
     )
     if self._study is None:
       raise ValueError("Study is not set.")
-    custom_tfidf_extractors = _select_custom_tfidf_extractors(
-      X, y
-    )
+    custom_tfidf_extractors = _select_custom_tfidf_extractors(X, y)
 
     tried_models = {}
     def mean_score(trial: optuna.Trial) -> float:
-      if self._context is None:
-        raise ValueError(f"Context is None.")
       estimators = [(
         "Features",
         FeatureUnion([
           ("TF-IDF",
            self._create_feature_extractor(trial=trial)),
-          (
-            "Custom TF-IDF",
-            make_pipeline(
-              CustomFeatureExtractor(custom_tfidf_extractors),
-              TfidfTransformer(norm=None),
-            )
-          )
+          ("Custom TF-IDF",
+           make_pipeline(
+             CustomFeatureExtractor(custom_tfidf_extractors),
+             TfidfTransformer(norm=None)))
         ])
       )]
       if self._normalized_data:
-        estimators += [("Normalizer",
-                        Normalizer(copy=False))]
+        estimators.append(("Normalizer", Normalizer(copy=False)))
+      assert self._context is not None
       if self._context.feature_estimator is not None:
-        estimators += [("Feature Selector",
-                        self._create_feature_selector(trial=trial))]
-      estimators += [self._create_predictor_data(trial=trial)]
+        estimators.append(("Feature Selector",
+                           self._create_feature_selector(trial=trial)))
+      estimators.append(self._create_predictor_data(trial=trial))
 
       classifier = Pipeline(estimators)
 
@@ -312,7 +308,6 @@ class TextClassifierBuilder:
       pickle.dump(model, open(saved_model_path, "wb"))
     except Exception as e:
       print("pickle.dump:", e, sep="\n")
-      os.remove(saved_model_path)
     return model
 
   def _fit(
@@ -332,8 +327,8 @@ class TextClassifierBuilder:
       X_tfidf = transformers.fit_transform(X, y)
 
     predictor = get_predictor(model)
-    params = params if params is not None else {}
-    predictor.set_params(**params)
+    if params:
+      predictor.set_params(**params)
 
     sample_weights = get_sample_weights(y) if balanced_weights else None
     predictor.fit(X_tfidf, y, sample_weight=sample_weights)
@@ -380,14 +375,11 @@ class TextClassifierBuilder:
   def _tokenize(self, message: str) -> list[str]:
     if self._context is None:
       raise ValueError(f"Context is not set.")
-    tokens = [token
-              for token in re.split(_REGEX_SEPARATORS,
-                                    message.lower())
-              if token]
     return [
       self._context.stemmer.stem(token)
-      for token in tokens
-      if (token not in self._context.all_names
+      for token in re.split(_REGEX_SEPARATORS, message.lower())
+      if (token
+          and token not in self._context.all_names
           and token not in self._context.all_stopwords
           and (re.search(_PATTERN_STARTING_DIGIT, token, re.U) is not None
                or re.search(_PATTERN_MID_DIGIT, token, re.U) is not None))
