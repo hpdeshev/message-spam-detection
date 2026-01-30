@@ -19,10 +19,13 @@ from sklearn.utils import check_X_y
 
 from common.config import classification, misc, tokenization
 from common.types import (
-  Tokens, FeatureExtractorMethodData,
   FeatureSelector, PipelineStep
 )
 from pipeline.custom_feature_extractor import CustomFeatureExtractor
+from pipeline.feature_detectors import (
+  CurrencyDetector, FeatureDetectorBase,
+  NumberDetector, CompositeFeatureDetector,
+)
 from pipeline.utils import (
   get_predictor, get_predictor_name, get_transformers
 )
@@ -31,9 +34,7 @@ from tasks.utils import get_sample_weights
 
 _CROSS_VAL_FBETA = 0.5  # Spam precision favored.
 _CROSS_VAL_SPLITS = 3
-_CURRENCY_SYMBOLS = tokenization().currencies
 _FEATURE_SELECTOR_TYPE = classification().feature_selector_type
-_MIN_DIGITS_IN_NUMBER = 3
 _OPTUNA_N_TRIALS = 30
 _PATTERN_STARTING_DIGIT = r"^[0-9]?[^\W\d_]+$"
 _PATTERN_MID_DIGIT = r"^[^\W\d_]+[0-9]?[^\W\d_]*$"
@@ -44,58 +45,37 @@ _REGEX_SEPARATORS = tokenization().regex_separators
 def _select_custom_tfidf_extractors(
   X: pd.Series,
   y: pd.Series,
-) -> FeatureExtractorMethodData:
+) -> list[FeatureDetectorBase]:
   """Selects a custom `TF-IDF` feature using `_CUSTOM_TFIDF_EXTRACTORS`.
 
   The custom `TF-IDF` feature is selected based on highest `chi-squared test`
   score with the target label.
   """
   pipe = make_pipeline(
-    CustomFeatureExtractor(_CUSTOM_TFIDF_EXTRACTORS),  # type: ignore
+    CustomFeatureExtractor(_CUSTOM_TFIDF_EXTRACTORS),
     TfidfTransformer(norm=None),
   )
   features = pipe.fit_transform(X, y)
   feature_selector = SelectKBest(chi2, k=1)
   feature_selector.fit(features, y)
 
-  best_features = feature_selector.get_feature_names_out(
-    input_features=list(_CUSTOM_TFIDF_EXTRACTORS)
-  )
-  return {
-    feature: _CUSTOM_TFIDF_EXTRACTORS[feature]
-    for feature in best_features
-  }
+  best_feature_indices = feature_selector.get_support(indices=True)
+  return [
+    _CUSTOM_TFIDF_EXTRACTORS[i]
+    for i in best_feature_indices
+  ]
 
 
-def _is_currency(token: str) -> bool:
-  if len(token) == 1 and token in _CURRENCY_SYMBOLS:
-    return True
-  return (token[1:].isnumeric() if token[0] in _CURRENCY_SYMBOLS
-          else token[:-1].isnumeric() if token[-1] in _CURRENCY_SYMBOLS
-          else False)
-
-
-def _is_number(token: str) -> bool:
-  return token.isnumeric() and len(token) >= _MIN_DIGITS_IN_NUMBER
-
-
-def _get_currency_count(tokens: Tokens) -> int:
-  return sum(1 for token in tokens if _is_currency(token))
-
-
-def _get_numbers_count(tokens: Tokens) -> int:
-  return sum(1 for token in tokens if _is_number(token))
-
-
-def _get_currency_numbers_count(tokens: Tokens) -> int:
-  return sum(1 for token in tokens if _is_currency(token) or _is_number(token))
-
-
-_CUSTOM_TFIDF_EXTRACTORS = {
-  "[CURRENCY]": _get_currency_count,
-  "[NUMBER]": _get_numbers_count,
-  "[CURRENCY_OR_NUMBER]": _get_currency_numbers_count,
-}
+_CURRENCY_DETECTOR = CurrencyDetector(
+  "[CURRENCY]", currency_symbols=tokenization().currencies)
+_NUMBER_DETECTOR = NumberDetector(
+  "[NUMBER]", min_digits=3)
+_CUSTOM_TFIDF_EXTRACTORS = [
+  _CURRENCY_DETECTOR,
+  _NUMBER_DETECTOR,
+  CompositeFeatureDetector("[CURRENCY_OR_NUMBER]",
+                           (_CURRENCY_DETECTOR, _NUMBER_DETECTOR)),
+]
 
 
 class Context:

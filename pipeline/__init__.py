@@ -2,6 +2,7 @@
 
 __all__ = [
   "custom_feature_extractor",
+  "feature_detectors",
   "sgd_classifier_builder",
   "text_classifier_builder",
   "utils",
