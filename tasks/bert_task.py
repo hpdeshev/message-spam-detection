@@ -1,6 +1,6 @@
 """A bidirectional encoder representations from transformers (BERT) builder."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from pathlib import Path
 import re
 from typing import Any, cast, override
@@ -9,7 +9,6 @@ import datasets
 import evaluate
 import luigi
 import numpy as np
-import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.utils.class_weight import compute_class_weight
 import torch
@@ -32,8 +31,9 @@ from tasks.best_bow_task import BestBowTask
 from tasks.train_test_split_task import TrainTestSplitTask
 
 
-_OUTPUT_MODEL_PATH = Path("models") / "bert_classifier" / "model"
-_OUTPUT_VOCAB_PATH = Path("models") / "bert_classifier" / "vocab.txt"
+_CLASSIFIER_PATH = Path("models") / "bert_classifier"
+_OUTPUT_MODEL_PATH = _CLASSIFIER_PATH / "model"
+_OUTPUT_VOCAB_PATH = _CLASSIFIER_PATH / "vocab.txt"
 _REGEX_SEPARATORS = tokenization().regex_separators
 
 
@@ -51,69 +51,73 @@ def get_bow_vocabulary(bow_classifier: Pipeline) -> set[str]:
     A set of `BoW` vocabulary items.
   """
   bow_vocabulary: set[str] = set()
-  feature_names = [name.removeprefix("TF-IDF__")
-                   for name in (get_transformers(bow_classifier)
-                                .get_feature_names_out())
-                   if name.startswith("TF-IDF__")]
-  custom_feature_names = list(
-    bow_classifier.named_steps["Features"]["Custom TF-IDF"]
-                  .named_steps["customfeatureextractor"].method_data
-  )
-  feature_names += custom_feature_names
+  regular_prefix, custom_prefix = "TF-IDF__", "Custom TF-IDF__"
+  feature_names = get_transformers(bow_classifier).get_feature_names_out()
   for name in feature_names:
-    ngrams = name.split()
-    if len(ngrams) > 1:
-      bow_vocabulary = bow_vocabulary.union(ngrams)
+    if name.startswith(regular_prefix):
+      bow_vocabulary = bow_vocabulary.union(
+        name.removeprefix(regular_prefix).split()
+      )
+    elif name.startswith(custom_prefix):
+      bow_vocabulary = bow_vocabulary.union(
+        name.removeprefix(custom_prefix).split()
+      )
     else:
-      bow_vocabulary.add(ngrams[0])
+      raise ValueError("Unexpected feature name prefix.")
   return bow_vocabulary
 
 
 def get_bow_dataset(
+  ds: datasets.Dataset,
   bow_classifier: Pipeline,
-  bow_vocabulary: set[str],
-  X: Iterable[str],
-  y: Iterable[int],
-) -> pd.DataFrame:
+  bow_vocabulary: set[str] | None = None,
+) -> datasets.Dataset:
   """Converts `get_bow_vocabulary`'s output to a message dataset.
-  
+
   Together with `get_bow_vocabulary`, this function makes it possible for
   `BERT` and `BoW` classifiers to learn from the same dataset and
   thus their results on the dataset can be compared.
 
   Args:
+    ds: A `datasets.Dataset` instance which contains messages and their
+      ham/spam labels.
     bow_classifier: A `Scikit-learn` pipeline.
-    bow_vocabulary: A set of `BoW` vocabulary items.
-    X: The messages.
-    y: The ham/spam labels.
+    bow_vocabulary: Optional, a set of `BoW` vocabulary items.
+      Can be initialized internally via the `get_bow_vocabulary` function.
 
   Returns:
-    A `Pandas` data frame.
+    A `datasets.Dataset` instance.
   """
-  dataset: dict[str, list[str | int]] = {
-    "message": [], "is_spam": []
-  }
-  feature_discovery_methods = (
-    bow_classifier.named_steps["Features"]["Custom TF-IDF"]
-                  .named_steps["customfeatureextractor"].method_data.items()
+  if bow_vocabulary is None:
+    bow_vocabulary = get_bow_vocabulary(bow_classifier)
+  features_step = bow_classifier.named_steps["Features"]
+  tfidf_features_step = features_step["TF-IDF"]
+  custom_tfidf_features_step = features_step["Custom TF-IDF"]
+  custom_feature_extractor = (
+    custom_tfidf_features_step.named_steps["customfeatureextractor"]
   )
-  for message, is_spam in zip(X, y):
+  feature_detectors = [
+    detector
+    for detector in custom_feature_extractor.detectors
+    if detector.feature_name in bow_vocabulary
+  ]
+  def preprocess_message(
+    row: MutableMapping[str, Any]
+  ) -> MutableMapping[str, Any]:
     tokens = []
-    for token in re.split(_REGEX_SEPARATORS,
-                          message.lower()):
+    for token in re.split(_REGEX_SEPARATORS, row["message"]):
       if token:
-        bow_token = (bow_classifier
-                     .named_steps["Features"]["TF-IDF"]
-                     .tokenizer(token))
+        bow_token = tfidf_features_step.tokenizer(token)
         bow_token = bow_token[0] if bow_token else token
         if bow_token in bow_vocabulary:
           tokens.append(bow_token)
-        for feature, checker in feature_discovery_methods:
-          if checker([bow_token]):
-            tokens.append(feature)
-    dataset["message"].append(" ".join(tokens))
-    dataset["is_spam"].append(is_spam)
-  return pd.DataFrame(dataset)
+        else:
+          for detector in feature_detectors:
+            if detector.check(bow_token):
+              tokens.append(detector.feature_name)
+    row["message"] = " ".join(tokens)
+    return row
+  return ds.map(preprocess_message)
 
 
 class BertTask(luigi.Task):
@@ -161,25 +165,20 @@ class BertTask(luigi.Task):
     vocab_filepath.parent.mkdir(parents=True, exist_ok=True)
     vocab_filepath.write_text("\n".join(bow_vocabulary))
 
-    train_df = pd.read_csv(
+    dataset = datasets.Dataset.from_csv(
       self.input()["train_test_split"]["train"].path
     )
-    bert_train_df = get_bow_dataset(
-      bow_classifier, bow_vocabulary,
-      train_df.message, train_df.is_spam,
-    )
-
-    tokenizer = BertTokenizer(
-      vocab_filepath,
-      model_max_length=self.max_input_tokens,
-      do_basic_tokenize=False,
-    )
-    dataset = datasets.Dataset.from_pandas(bert_train_df)
+    dataset = get_bow_dataset(dataset, bow_classifier, bow_vocabulary)
     dataset = dataset.class_encode_column("is_spam")
     dataset = dataset.train_test_split(
       test_size=classification().validation_split,
       seed=misc().random_seed, shuffle=True,
       stratify_by_column="is_spam",
+    )
+    tokenizer = BertTokenizer(
+      vocab_filepath,
+      model_max_length=self.max_input_tokens,
+      do_basic_tokenize=False,
     )
     def preprocess(
       data: Mapping[str, Any],
@@ -190,8 +189,8 @@ class BertTask(luigi.Task):
                      )["input_ids"],
         "labels": data["is_spam"],
       }
-    train_ds = dataset["train"].map(preprocess, batched=True)
-    val_ds = dataset["test"].map(preprocess, batched=True)
+    dataset = dataset.map(preprocess, batched=True)
+    train_ds, val_ds = dataset["train"], dataset["test"]
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     model = BertForSequenceClassification(
       AutoConfig.from_pretrained(self.model_name)
@@ -221,11 +220,14 @@ class BertTask(luigi.Task):
       predictions = np.argmax(predictions, axis=1)
       result = accuracy.compute(predictions=predictions, references=labels)
       if result is None:
-        raise EnvironmentError(
-          "Accuracy module not run on the main process."
-        )
+        raise EnvironmentError("Accuracy module not run on the main process.")
       return result
-    classes = np.unique(train_df.is_spam)
+    y = train_ds["labels"]
+    class_weights = compute_class_weight(
+      class_weight="balanced",
+      classes=np.unique(y),
+      y=y,
+    )
     class CustomTrainer(Trainer):
       def compute_loss(
         self,
@@ -238,11 +240,6 @@ class BertTask(luigi.Task):
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.get("logits")
-        class_weights = compute_class_weight(
-          class_weight="balanced",
-          classes=classes,
-          y=train_df.is_spam,
-        )
         loss_fct = nn.CrossEntropyLoss(
           weight=torch.tensor(
             class_weights, device=model.device, dtype=torch.float32
