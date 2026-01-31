@@ -1,6 +1,6 @@
 """A bidirectional encoder representations from transformers (BERT) builder."""
 
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Iterable, MutableMapping
 from pathlib import Path
 import re
 from typing import Any, cast, override
@@ -168,6 +168,7 @@ class BertTask(luigi.Task):
     dataset = datasets.Dataset.from_csv(
       self.input()["train_test_split"]["train"].path
     )
+    dataset = dataset.remove_columns("kind")
     dataset = get_bow_dataset(dataset, bow_classifier, bow_vocabulary)
     dataset = dataset.class_encode_column("is_spam")
     dataset = dataset.train_test_split(
@@ -180,16 +181,11 @@ class BertTask(luigi.Task):
       model_max_length=self.max_input_tokens,
       do_basic_tokenize=False,
     )
-    def preprocess(
-      data: Mapping[str, Any],
-    ) -> Mapping[str, Any]:
-      return {
-        "input_ids": tokenizer(
-                      data["message"], truncation=True
-                     )["input_ids"],
-        "labels": data["is_spam"],
-      }
-    dataset = dataset.map(preprocess, batched=True)
+    def preprocess(data: dict[str, Any]) -> dict[str, Any]:
+      return {"input_ids":
+                tokenizer(data["message"], truncation=True)["input_ids"]}
+    dataset = dataset.map(preprocess, batched=True, remove_columns="message")
+    dataset = dataset.rename_column("is_spam", "labels")
     train_ds, val_ds = dataset["train"], dataset["test"]
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     model = BertForSequenceClassification(
